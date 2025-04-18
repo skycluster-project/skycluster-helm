@@ -16,6 +16,7 @@ metadata:
     skycluster.io/provider-region-alias: {{ $data.regionAlias }}
     skycluster.io/provider-zone: global
     skycluster.io/provider-type: global
+    skycluster.io/provider-enabled: {{ $data.enabled | quote }}
 data:
   enabled: {{ $data.enabled | quote }}
       {{- range $key, $value := $.Values.providerMappings.azure.global }}
@@ -52,6 +53,7 @@ metadata:
     skycluster.io/provider-region-alias: {{ $data.regionAlias }}
     skycluster.io/provider-zone: {{ $zone.name }}
     skycluster.io/provider-type: {{ $zone.type }}
+    skycluster.io/provider-enabled: {{ $zone.enabled | quote }}
 data:
   default-zone: {{ $zone.defaultZone | quote }}  
   enabled: {{ $zone.enabled | quote }}

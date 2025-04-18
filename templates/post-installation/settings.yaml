@@ -17,6 +17,7 @@ metadata:
     skycluster.io/provider-region-alias: {{ $data.regionAlias }}
     skycluster.io/provider-zone: global
     skycluster.io/provider-type: global
+    skycluster.io/provider-enabled: {{ $data.enabled | quote }}
 data:
   enabled: {{ $data.enabled | quote }}
   {{ range $image_key, $img_data := $data.images -}}
@@ -47,6 +48,7 @@ metadata:
     skycluster.io/provider-region-alias: {{ $data.regionAlias }}
     skycluster.io/provider-zone: {{ $zone.name }}
     skycluster.io/provider-type: {{ $zone.type }}
+    skycluster.io/provider-enabled: {{ $zone.enabled | quote }}
 data:
   enabled: {{ $zone.enabled | quote }}
   {{ range $v := $zone.flavors -}}
