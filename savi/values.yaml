@@ -1,0 +1,136 @@
+providers:
+  private:  
+    openstack: 
+      enabled: true
+
+# Set these settings through the command line
+generateTemplate:
+  skyprovider: false
+generateConfigMaps: false          
+
+savi:
+  locations:
+    - region: scinet
+      enabled: true
+      ext-os-public-subnet-name: ext-net
+      ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+      ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+      zones:
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: nte
+        enabled: true  
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+      - type: edge
+        enabled: true 
+    - region: vaughan
+      enabled: true
+      ext-os-public-subnet-name: ext-net
+      ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+      ext-RouterV2-networking-v1alpha1: 712f6f07-374e-498a-99bd-e07a7a171cba
+      zones:
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: cloud
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: nte
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true
+      - type: edge
+        enabled: true

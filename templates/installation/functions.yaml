@@ -1,0 +1,11 @@
+{{ if .Values.install }}
+  {{- range $key, $func := .Values.functions }}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: {{ $func.name }}
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/{{ $func.name }}:{{ $func.version }}
+---
+  {{ end }}
+{{ end }}

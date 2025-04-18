@@ -1,0 +1,238 @@
+
+{{- if .Values.providers.private.openstack.enabled }}
+{{- if .Values.generateConfigMaps }}
+providerMappings:
+  openstack:
+    regions:
+{{- range .Values.savi.locations }}
+{{- if eq .region "scinet" }}
+      - name: {{ .region }}
+        region: {{ .region }}
+        regionAlias: {{ .region }}
+        continent: NorthAmerica
+        enabled: {{ if .enabled }} true {{ else }} false {{ end }}
+        extRef:
+          ext-SubnetV2-networking-v1alpha1: {{ index . "ext-os-public-subnet-name" }}
+          ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
+          ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
+        zones:
+{{- range $index, $zone := .zones }}
+          - name: zone-{{ $index | add 1 }}
+            locationName: scinet_{{ $zone.type }}_{{ $index | add 1 }}
+            defaultZone: {{ if eq $index 0 }} true {{ else }} false {{ end }}
+            enabled: {{ if $zone.enabled }} true {{ else }} false {{ end }}
+            type: {{ $zone.type }}
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+{{- end }}
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
+{{- end }}
+{{- if eq .region "vaughan" }}
+      - name: {{ .region }}
+        enabled: {{ if .enabled }} true {{ else }} false {{ end }}
+        region: {{ .region }}
+        regionAlias: {{ .region }}
+        continent: NorthAmerica
+        extRef:
+          ext-SubnetV2-networking-v1alpha1: {{ index . "ext-os-public-subnet-name" }}
+          ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
+          ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
+        zones:
+{{- range $index, $zone := .zones }}
+          - name: zone-{{ $index | add 1 }}
+            locationName: vaughan_{{ $zone.type }}_{{ $index | add 1 }}
+            defaultZone: {{ if eq $index 0 }} true {{ else }} false {{ end }}
+            type: {{ $zone.type }}
+            enabled: {{ if $zone.enabled }} true {{ else }} false {{ end }}
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+{{- end }}
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+# Scinet Flavors
+              # 1vCPU-2GB: m1.small
+              # 1vCPU-4GB: n1.small
+              # 1vCPU-8GB: o1.small
+              # 2vCPU-4GB: m1.medium
+              # 2vCPU-8GB: n1.medium
+              # 2vCPU-16GB: o1.medium
+              # 2vCPU-32GB: p1.medium
+              # 4vCPU-8GB: p1.large
+              # 4vCPU-16GB: p2.large
+              # 4vCPU-32GB: p3.large
+              # 8vCPU-16GB: m1.xlarge
+              # 8vCPU-32GB: m2.xlarge
+              # 12vCPU-32GB: s1.large
+              
+# Vaughan Flavors
+              # 1vCPU-2GB: m1.small
+              # 1vCPU-4GB: n1.small
+              # 1vCPU-8GB: o1.small
+              # 2vCPU-4GB: m1.medium
+              # 2vCPU-8GB: n1.medium
+              # 2vCPU-16GB: o1.medium
+              # 2vCPU-32GB: p1.medium
+              # 4vCPU-8GB: m1.large
+              # 4vCPU-16GB: m1.large16
+              # 4vCPU-32GB: m1.large32
+              # 8vCPU-32GB: r1.large
+              # 12vCPU-32GB: s1.large

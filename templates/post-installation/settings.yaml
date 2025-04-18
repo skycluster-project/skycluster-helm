@@ -1,0 +1,314 @@
+{{ if .Values.postInstall }}
+---
+{{ range $key, $data := .Values.providerMappings.openstack.regions }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: os.{{ $data.region | lower }}.global
+  namespace: {{ $.Values.namespaces.skycluster.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/config-type: provider-mappings
+    skycluster.io/provider-name: os
+    skycluster.io/provider-region: {{ $data.region }}
+    skycluster.io/provider-continent: {{ $data.continent | quote }}
+    # region alias should be set to empty for global/default config
+    # TODO: check if this requirement is still valid
+    skycluster.io/provider-region-alias: {{ $data.regionAlias }}
+    skycluster.io/provider-zone: global
+    skycluster.io/provider-type: global
+data:
+  enabled: {{ $data.enabled | quote }}
+  {{ range $image_key, $img_data := $data.images -}}
+  {{ printf "image-%s" $image_key }}: {{ $img_data }}
+  {{ end }}
+  {{- range $zone := $data.zones -}}
+  {{- if $zone.defaultZone -}}
+  default-zone: {{ $zone.name }}
+  {{ end }} 
+  {{- end -}} 
+  {{ range $k, $v := $data.extRef -}}
+  {{ printf "%s" $k }}: {{ $v }}
+  {{ end }}
+---
+  {{ range $zone := $data.zones -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: os.{{ $data.region | lower }}.{{ $zone.name | lower }}.{{ $zone.type | lower}}
+  namespace: {{ $.Values.namespaces.skycluster.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/config-type: provider-mappings
+    skycluster.io/provider-name: os
+    skycluster.io/provider-region: {{ $data.region }}
+    skycluster.io/provider-continent: {{ $data.continent | quote }}
+    skycluster.io/provider-loc-name: {{ $zone.locationName | quote }}
+    skycluster.io/provider-region-alias: {{ $data.regionAlias }}
+    skycluster.io/provider-zone: {{ $zone.name }}
+    skycluster.io/provider-type: {{ $zone.type }}
+data:
+  enabled: {{ $zone.enabled | quote }}
+  {{ range $v := $zone.flavors -}}
+  {{ printf "flavor-%s" $v.flavor }}: {{ $v.name | quote }}
+  {{ end -}}
+  {{ range $v := $zone.storage -}}
+  {{ printf "storage-%s-price" ($v.name) }}: {{ $v.price | quote }}
+  {{ printf "storage-%s-step" ($v.name) }}: {{ $v.step | quote }}
+  {{ end -}}
+  {{ range $v := $zone.egressDataTransfer -}}
+  {{ printf "egressDataTransfer-%s" ($v.name | lower) }}: {{ $v.price | quote }}
+  {{ end }}
+  {{- range $k, $v := $zone.defaults -}}
+  {{ printf "default-%s" $k }}: {{ $v }}
+  {{ end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: os.{{ $data.region }}.{{ $zone.name }}.{{ $zone.type }}.offerings
+  namespace: {{ $.Values.namespaces.skycluster.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/config-type: provider-vservices
+    skycluster.io/vservices-family: compute
+    skycluster.io/provider-name: os
+    skycluster.io/provider-loc-name: {{ $zone.locationName | quote}}
+    skycluster.io/provider-region: {{ $data.region }}
+    skycluster.io/provider-continent: {{ $data.continent | quote }}
+    skycluster.io/provider-region-alias: {{ $data.regionAlias }}
+    skycluster.io/provider-zone: {{ $zone.name }}
+    skycluster.io/provider-type: {{ $zone.type }}
+data:
+        {{- range $k, $v := $zone -}}
+          {{- if eq (typeOf $v) "[]interface {}" }}
+              {{- if eq $k "flavors" }}
+                {{- range $v4 := $v }}
+  {{ printf "skyvm_flavor_%s" $v4.flavor }}: {{ $v4.price | quote }}
+                {{- end }}
+              {{- else if eq $k "storage" }}
+                {{- range $v4 := $v }}
+  {{ printf "skyvm_storage_%s" ($v4.name) }}: {{ $v4.price | quote }}
+                {{- end }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- range $k, $v := $data.images }}
+  {{ printf "skyvm_image_%s" $k }}: {{ "0" | quote }}
+        {{- end }}
+---
+  {{ end }} 
+{{ end }} 
+---
+apiVersion: kubernetes.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: kubernetes-provider
+spec:
+  credentials:
+    source: InjectedIdentity
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: skycluster-pv
+  namespace: {{ .Values.namespaces.skycluster.name }}
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: skycluster-pvc
+  namespace: {{ .Values.namespaces.skycluster.name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: provider-attributes-setup
+  namespace: {{ .Values.namespaces.skycluster.name }}
+  labels:
+    skycluster.io/app-name: skycluster
+spec:
+  serviceAccountName: skycluster-sva
+  initContainers:
+    - name: kubectl
+      image: registry.skycluster.io/kubectl:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          kubectl get configmaps -l \
+            skycluster.io/config-type=provider-mappings,skycluster.io/managed-by=skycluster \
+            -n skycluster -o json | jq -c > /shared/providers.json
+
+          kubectl get configmaps -l \
+            skycluster.io/config-type=provider-vservices,skycluster.io/managed-by=skycluster \
+            -n skycluster -o json | jq -c > /shared/offerings.json
+      volumeMounts:
+        - name: storage
+          mountPath: /shared
+  containers:
+    - name: python
+      image: etesami/python:3.9-yaml
+      command: ["python", "-c"]
+      args:
+        - |
+          import yaml
+          from collections import defaultdict
+          import json
+
+          def get_latency(src_continent, dst_continent, src_region, dst_region, src_type, dst_type):
+            # us-east, us-west, cloud, edge
+            def cloud_cloud_latency(same_continent):
+              if same_continent:
+                return 100
+              else:
+                return 200
+            def cloud_edge_latency(): # same continent, same region
+              return 15
+            def cloud_nte_latency(): # same continent, same region
+              return 25
+            def edge_edge_latency(): # same continent, same region (they are in close proximity)
+              return 6
+            def nte_nte_latency(): # same continent, same region
+              return 10
+            def nte_edge_latency():
+              return 8
+            same_region = src_region == dst_region
+            same_continent = src_continent == dst_continent
+            if src_type == 'cloud' and dst_type == 'cloud':
+              total_latency = cloud_cloud_latency(same_continent)
+              return round(total_latency, 2)
+            elif (src_type == 'cloud' and dst_type == 'nte') or (src_type == 'nte' and dst_type == 'cloud'):
+              total_latency = cloud_nte_latency()
+              return round(total_latency, 2)
+            elif (src_type == 'cloud' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'cloud'):
+              total_latency = cloud_edge_latency()
+              return round(total_latency, 2)
+            elif src_type == 'edge' and dst_type == 'edge':
+              total_latency = edge_edge_latency()
+              return round(total_latency, 2)
+            elif src_type == 'nte' and dst_type == 'nte':
+              total_latency = nte_nte_latency()
+              return round(total_latency, 2)  
+            elif (src_type == 'nte' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'nte'):
+              total_latency = nte_edge_latency()
+              return round(total_latency, 2)  
+            else:
+              raise ValueError("Unsupported communication type", src_type, dst_type, src_region, dst_region)
+
+          def get_latency_matrix(providers):
+            matrix = defaultdict(dict)
+            for ss, ssdata in providers.items():
+              for tt, ttdata in providers.items():
+                if 'global' in ss or 'global' in tt:
+                  continue
+                if ssdata['alias'] is None or ssdata['alias'] == "" \
+                  or ttdata['alias'] is None or ttdata['alias'] == "":
+                  continue
+                if ss == tt:
+                  matrix[ss][tt] = 0
+                else:
+                  matrix[ss][tt] = get_latency(
+                    ssdata['alias'], ttdata['alias'], ssdata['type'], ttdata['type'])
+            return matrix
+
+          def write_providers_csv(providers, filename):
+            with open(filename, 'w') as f:
+              for provider in providers['items']:
+                providerName = provider['metadata']['name']
+                pLabels = provider['metadata']['labels']
+                pRegionAlias = pLabels['skycluster.io/provider-region-alias']
+                pRegion = pLabels['skycluster.io/provider-region']
+                pZone = pLabels['skycluster.io/provider-zone']
+                pType = pLabels['skycluster.io/provider-type']
+                if pType == 'global' or pZone == 'global':
+                  continue
+                f.write(f"{providerName}, {providerName}, {pRegionAlias}, {pZone}, {pType}, {pRegion}\n")
+
+          def write_provider_attr_csv(providers, filename):
+            providerAttr = defaultdict(dict)
+            providerAttr_json = filename.replace('.csv', '.json')
+            with open(filename, 'w') as f:
+              for provider in providers['items']:
+                providerName = provider['metadata']['name']
+                pLabels = provider['metadata']['labels']
+                pZone = pLabels['skycluster.io/provider-zone']
+                pContinent = pLabels['skycluster.io/provider-continent']
+                pType = pLabels['skycluster.io/provider-type']
+                pRegion = pLabels['skycluster.io/provider-region']
+                pData = provider['data']
+                if pType == 'global' or pZone == 'global':
+                  continue
+                # Currently only wre support transferring through the internet
+                # so price of data transfer to internet will be set for sending traffic
+                # from the current provider to all other providers
+                
+                for pDst in providers['items']:
+                  pDstName = pDst['metadata']['name']
+                  pDstType = pDst['metadata']['labels']['skycluster.io/provider-type']
+                  pDstContinent = pLabels['skycluster.io/provider-continent']
+                  pDstRegion = pDst['metadata']['labels']['skycluster.io/provider-region']
+                  transferCosts = 0
+                  latency = 0
+                  if provider == pDst or pDstType == 'global':
+                    continue
+                  if 'egressDataTransfer-internet' not in pData:
+                    transferCosts = 0
+                  else:
+                    transferCosts = pData['egressDataTransfer-internet']
+                  # We calculate latency automatically, but in the beginning we will set it manually
+                  latency = get_latency(pContinent, pDstContinent, pRegion, pDstRegion, pType, pDstType)
+                  providerAttr[providerName][pDstName] = {
+                    'latency': latency,
+                    'transferCosts': transferCosts
+                  }
+                  f.write(f"{providerName}, {pDstName}, {latency}, {transferCosts}\n")
+            with open(providerAttr_json, 'w') as f:
+              f.write(json.dumps(providerAttr))
+                    
+          def write_vservices_csv(offerings, filename):
+            with open(filename, 'w') as f:
+              for vservices in offerings['items']:
+                labels = vservices['metadata']['labels']
+                pName = labels['skycluster.io/provider-name']
+                pRegion = labels['skycluster.io/provider-region']
+                pZone = labels['skycluster.io/provider-zone']
+                pType = labels['skycluster.io/provider-type']
+                for vservice, price in vservices['data'].items():
+                  f.write(f"{vservice}, {pName}-{pRegion}-{pRegion}-{pZone}, {price}, -1\n")
+            
+          with open('/shared/providers.json', 'r') as f:
+            json_str = f.read()
+            providers_json = json.loads(json_str)  
+            write_providers_csv(providers_json, '/shared/providers.csv')
+            write_provider_attr_csv(providers_json, '/shared/providers-attr.csv')
+          print("done writing providers.csv")
+
+          with open('/shared/offerings.json', 'r') as f:
+            json_str = f.read()
+            offerings_json = json.loads(json_str)  
+            write_vservices_csv(offerings_json, '/shared/vservices.csv')
+            
+          print("done writing vservices.csv")
+      volumeMounts:
+        - name: storage
+          mountPath: /shared
+  volumes:
+    - name: storage
+      persistentVolumeClaim:
+        claimName: skycluster-pvc
+  restartPolicy: Never
+---
+{{ end }}

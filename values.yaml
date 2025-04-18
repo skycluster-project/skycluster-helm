@@ -1,0 +1,1057 @@
+updateMappingsOnly: false
+install: false
+postInstall: false
+
+providers:
+  public:
+    aws:
+      name: provider-aws-ec2
+      version: v1.19.0
+      enabled: true
+    gcp:  
+      name: provider-gcp-compute
+      version: v1.11.2
+      enabled: true
+    azure:  
+      name: provider-azure-compute
+      version: v1.11.0
+      enabled: true
+    azure-network:
+      name: provider-azure-network
+      version: v1.11.0
+      enabled: true
+  private:
+    openstack:  
+      name: provider-openstack
+      version: v0.3.0-64.g2ebefb6
+      enabled: true
+  local:
+    kubernetes:
+      name: provider-kubernetes
+      version: v0.15.1
+      enabled: true
+    ssh:
+      name: provider-ssh
+      version: latest
+      enabled: true
+
+functions:
+  go-templating:
+    name: function-go-templating
+    version: v0.9.0
+  extra-resources:
+    name: function-extra-resources
+    version: v0.0.3
+  auto-ready:
+    name: function-auto-ready
+    version: v0.4.0
+  patch-and-transform:
+    name: function-patch-and-transform
+    version: v0.8.0
+
+namespaces:
+  skycluster:
+    name: skycluster
+  crossplane:
+    name: crossplane-system
+
+providerMappings:
+  aws:
+    global:
+    regions:
+      - name: aws_us-east-1_cloud_VI
+        region: us-east-1
+        continent: NorthAmerica
+        regionAlias: us-east
+        enabled: false
+        zones:
+          # We need to ensure for each region, there is one zone
+          # with defaultZone set to true
+          - name: use1-az1
+            locationName: Virginia
+            defaultZone: true
+            enabled: true
+            type: cloud
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 8vCPU-32GB
+              image: ubuntu-24.04
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors: 
+              - flavor: 1vCPU-2GB
+                name: t2.small
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - flavor: 2vCPU-4GB
+                name: t3.medium
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: t3.large
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: t3.xlarge
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: t3.2xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet # Could be "Provider" and the name should point to the provider name
+                price: 0.09
+          - name: us-east-1-wl1-nyc-wlz-1
+            locationName: NewYork
+            defaultZone: false
+            enabled: true
+            type: nte
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.108
+          - name: us-east-1-wl1-iah-wlz-1
+            locationName: Houston
+            defaultZone: false
+            enabled: true
+            type: nte
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.108
+          - name: us-east-1-bos-1a
+            locationName: Boston
+            defaultZone: false
+            enabled: true
+            borderGroup: us-east-1-bos-1
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-east-1-phl-1a
+            locationName: Philadelphia
+            defaultZone: false
+            enabled: true
+            borderGroup: us-east-1-phl-1
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-east-1-iah-2a
+            defaultZone: false
+            enabled: true
+            borderGroup: us-east-1-iah-2
+            locationName: Houston
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: c6i.large
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-east-1-dfw-2a
+            locationName: Dallas
+            defaultZone: false
+            enabled: true
+            borderGroup: us-east-1-dfw-2
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: c6i.large
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+        images: 
+          ubuntu-24.04: ami-0980c117fa7ebaffd
+          ubuntu-22.04: ami-07543813a68cc4fe9
+          ubuntu-20.04: ami-0f81732f07ce19b1c
+          # ubuntu-18.04: ami-03025bb25a1de0fc2
+      - name: aws_us-west-2_cloud_CA
+        region: us-west-2
+        regionAlias: us-west
+        continent: NorthAmerica
+        enabled: false
+        zones:
+          - name: usw2-az2
+            locationName: California
+            defaultZone: true
+            enabled: true
+            type: cloud
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 8vCPU-32GB
+              image: ubuntu-24.04
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors: 
+              - name: t2.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: t3.large
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: t3.xlarge
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: t3.2xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-west-2-wl1-las-wlz-1
+            locationName: LasVegas
+            defaultZone: false
+            enabled: true
+            type: nte
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.108
+          - name: us-west-2-wl1-sea-wlz-1
+            locationName: Seattle
+            defaultZone: false
+            enabled: true
+            type: nte
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.108
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+          - name: us-west-2-sea-1a
+            locationName: Seattle
+            defaultZone: false
+            enabled: true
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-west-2-pdx-1a
+            locationName: Portland
+            defaultZone: false
+            enabled: true
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-west-2-lax-1a
+            locationName: LosAngeles
+            defaultZone: false
+            enabled: true
+            type: edge
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+        images: 
+          ubuntu-24.04: ami-0980c117fa7ebaffd
+          ubuntu-22.04: ami-0075013580f6322a1
+          ubuntu-20.04: ami-00c12baa984f651c4
+          # ubuntu-18.04: ami-0075ef908dba2df0a     
+      - name: aws-ca-central-1
+        region: ca-central-1
+        regionAlias: ca-central
+        enabled: false
+        continent: NorthAmerica
+        zones: 
+          - name: ca-central-1a
+            locationName: Toronto
+            defaultZone: true
+            type: cloud
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 8vCPU-32GB
+              image: ubuntu-24.04
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors: 
+              - name: t2.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: t3.large
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: t3.xlarge
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: t3.2xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+        images: 
+          ubuntu-24.04: ami-0980c117fa7ebaffd
+          ubuntu-22.04: ami-07543813a68cc4fe9
+          ubuntu-20.04: ami-0f81732f07ce19b1c
+          # ubuntu-18.04: ami-03025bb25a1de0fc2
+
+  gcp:
+    global:
+      images: 
+        ubuntu-24.04: projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20250117
+        ubuntu-22.04: projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts
+        ubuntu-20.04: projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts
+        # ubuntu-18.04: not_available
+    regions:
+      - name: us-east1
+        locationName: SouthCarolina
+        region: us-east1
+        continent: NorthAmerica
+        regionAlias: us-east
+        enabled: false
+        zones:
+          - name: b
+            locationName: SouthCarolina
+            defaultZone: true
+            enabled: true
+            type: cloud
+            defaults:
+              flavor: 2vCPU-4GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-2GB
+              max-vCPU: 8vCPU-32GB
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: e2-small
+                flavor: 2vCPU-2GB
+                vcpus: 2
+                ram: 2GB
+                price: 0.01675
+              - name: e2-medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.03350
+              - name: e2-standard-2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.067
+              - name: e2-standard-4
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1340
+              - name: e2-standard-8
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.2680
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.085
+      - name: us-west1
+        locationName: Oregon
+        region: us-west1
+        continent: NorthAmerica
+        regionAlias: us-west
+        enabled: false
+        zones:
+          - name: b
+            locationName: Oregon
+            defaultZone: true
+            enabled: true
+            type: cloud
+            defaults:
+              flavor: 2vCPU-4GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-2GB
+              max-vCPU: 8vCPU-32GB
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: e2-small
+                flavor: 2vCPU-2GB
+                vcpus: 2
+                ram: 2GB
+                price: 0.01675
+              - name: e2-medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.03350
+              - name: e2-standard-2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.067
+              - name: e2-standard-4
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1340
+              - name: e2-standard-8
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.2680
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.085
+  azure:
+    regions:
+      - name: southafricanorth
+        continent: Africa
+        locationName: Johannesburg
+        region: southafricanorth
+        regionAlias: southafrica-north
+        enabled: false
+        zones:
+          # The default zone is not applicable in Azure
+          # Azure has restrictions on the availability of 
+          # certain instance types, images, public IPs and 
+          # other resources in certain zones, so we don't 
+          # specify a default zone.
+          # We just need to make sure the location (region) 
+          # supports the requirement and let Azure pick 
+          # the zone for us.
+          - name: default
+            locationName: Johannesburg
+            defaultZone: true
+            enabled: true
+            type: cloud
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: 24_04-lts-gen2
+                version: latest
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+      - name: northcentralus
+        continent: NorthAmerica
+        locationName: Illinois
+        region: northcentralus
+        regionAlias: us-northcentral
+        enabled: false
+        zones:
+          - name: default
+            locationName: Illinois
+            defaultZone: true
+            enabled: true
+            type: cloud
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: 24_04-lts-gen2
+                version: latest
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+      - name: southcentralus
+        locationName: Texas
+        continent: NorthAmerica
+        region: southcentralus
+        regionAlias: us-southcentral
+        enabled: false
+        zones:
+          - name: default
+            locationName: Texas
+            defaultZone: true
+            enabled: true
+            type: cloud
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: 24_04-lts-gen2
+                version: latest
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+      - name: canadaeast
+        locationName: Toronto
+        region: canadaeast
+        continent: NorthAmerica
+        regionAlias: ca-east
+        enabled: false
+        zones:
+          - name: default
+            locationName: Toronto
+            defaultZone: true
+            enabled: true
+            type: cloud
+            images: 
+              ubuntu-20.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-focal
+                sku: 20_04-lts-gen2
+                version: latest
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: 24_04-lts-gen2
+                version: latest
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+      - name: canadacentral
+        locationName: Montreal
+        region: canadacentral
+        regionAlias: ca-central
+        continent: NorthAmerica
+        enabled: false
+        zones:
+          - name: default
+            locationName: Montreal
+            defaultZone: true
+            enabled: true
+            type: cloud
+            images: 
+              ubuntu-18.04: 
+                publisher: Canonical
+                offer: UbuntuServer
+                sku: 18_04-lts-gen2
+                version: latest
+              ubuntu-20.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-focal
+                sku: 20_04-lts-gen2
+                version: latest
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: 24_04-lts-gen2
+                version: latest
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+      - name: centralus
+        locationName: Iowa
+        continent: NorthAmerica
+        regionAlias: us-central
+        region: centralus
+        enabled: false
+        zones:
+          - name: default
+            locationName: Iowa
+            defaultZone: true
+            enabled: true
+            type: cloud
+            images: 
+              ubuntu-18.04: 
+                publisher: Canonical
+                offer: UbuntuServer
+                sku: 18_04-lts-gen2
+                version: latest
+              ubuntu-20.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-focal
+                sku: 20_04-lts-gen2
+                version: latest
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: server
+                version: latest
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2ls_v2
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2s_v2
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4s_v2
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8s_v2
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
