@@ -1,0 +1,4572 @@
+---
+# Source: skycluster-savi/templates/settings-templates.yaml
+providerMappings:
+  openstack:
+    regions:
+      - name: scinet
+        region: scinet
+        regionAlias: scinet
+        continent: NorthAmerica
+        enabled:  true 
+        extRef:
+          ext-SubnetV2-networking-v1alpha1: ext-net
+          ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+          ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        zones:
+          - name: zone-1
+            locationName: scinet_cloud_1
+            defaultZone:  true 
+            enabled:  true 
+            type: cloud
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-2
+            locationName: scinet_cloud_2
+            defaultZone:  false 
+            enabled:  true 
+            type: cloud
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-3
+            locationName: scinet_cloud_3
+            defaultZone:  false 
+            enabled:  true 
+            type: cloud
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-4
+            locationName: scinet_cloud_4
+            defaultZone:  false 
+            enabled:  true 
+            type: cloud
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-5
+            locationName: scinet_nte_5
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-6
+            locationName: scinet_nte_6
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-7
+            locationName: scinet_nte_7
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-8
+            locationName: scinet_nte_8
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-9
+            locationName: scinet_nte_9
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-10
+            locationName: scinet_nte_10
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-11
+            locationName: scinet_nte_11
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-12
+            locationName: scinet_nte_12
+            defaultZone:  false 
+            enabled:  true 
+            type: nte
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-13
+            locationName: scinet_edge_13
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-14
+            locationName: scinet_edge_14
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-15
+            locationName: scinet_edge_15
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-16
+            locationName: scinet_edge_16
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-17
+            locationName: scinet_edge_17
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-18
+            locationName: scinet_edge_18
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-19
+            locationName: scinet_edge_19
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-20
+            locationName: scinet_edge_20
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-21
+            locationName: scinet_edge_21
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-22
+            locationName: scinet_edge_22
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-23
+            locationName: scinet_edge_23
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-24
+            locationName: scinet_edge_24
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-25
+            locationName: scinet_edge_25
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-26
+            locationName: scinet_edge_26
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-27
+            locationName: scinet_edge_27
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-28
+            locationName: scinet_edge_28
+            defaultZone:  false 
+            enabled:  true 
+            type: edge
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            flavors:
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.032
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                flavor: 8vCPU-16GB
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
+      - name: vaughan
+        enabled:  true 
+        region: vaughan
+        regionAlias: vaughan
+        continent: NorthAmerica
+        extRef:
+          ext-SubnetV2-networking-v1alpha1: ext-net
+          ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+          ext-RouterV2-networking-v1alpha1: 712f6f07-374e-498a-99bd-e07a7a171cba
+        zones:
+          - name: zone-1
+            locationName: vaughan_cloud_1
+            defaultZone:  true 
+            type: cloud
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-2
+            locationName: vaughan_cloud_2
+            defaultZone:  false 
+            type: cloud
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-3
+            locationName: vaughan_cloud_3
+            defaultZone:  false 
+            type: cloud
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-4
+            locationName: vaughan_cloud_4
+            defaultZone:  false 
+            type: cloud
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-5
+            locationName: vaughan_nte_5
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-6
+            locationName: vaughan_nte_6
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-7
+            locationName: vaughan_nte_7
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-8
+            locationName: vaughan_nte_8
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-9
+            locationName: vaughan_nte_9
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-10
+            locationName: vaughan_nte_10
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-11
+            locationName: vaughan_nte_11
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-12
+            locationName: vaughan_nte_12
+            defaultZone:  false 
+            type: nte
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-13
+            locationName: vaughan_edge_13
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-14
+            locationName: vaughan_edge_14
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-15
+            locationName: vaughan_edge_15
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-16
+            locationName: vaughan_edge_16
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-17
+            locationName: vaughan_edge_17
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-18
+            locationName: vaughan_edge_18
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-19
+            locationName: vaughan_edge_19
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-20
+            locationName: vaughan_edge_20
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-21
+            locationName: vaughan_edge_21
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-22
+            locationName: vaughan_edge_22
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-23
+            locationName: vaughan_edge_23
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-24
+            locationName: vaughan_edge_24
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-25
+            locationName: vaughan_edge_25
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-26
+            locationName: vaughan_edge_26
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-27
+            locationName: vaughan_edge_27
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+          - name: zone-28
+            locationName: vaughan_edge_28
+            defaultZone:  false 
+            type: edge
+            enabled:  true 
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.02
+            flavors: 
+              - name: m1.small
+                flavor: 1vCPU-2GB
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                flavor: 1vCPU-4GB
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                flavor: 1vCPU-8GB
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                flavor: 2vCPU-16GB
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                flavor: 2vCPU-32GB
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                flavor: 4vCPU-8GB
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                flavor: 4vCPU-32GB
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                flavor: 12vCPU-32GB
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
+
+# Scinet Flavors
+              # 1vCPU-2GB: m1.small
+              # 1vCPU-4GB: n1.small
+              # 1vCPU-8GB: o1.small
+              # 2vCPU-4GB: m1.medium
+              # 2vCPU-8GB: n1.medium
+              # 2vCPU-16GB: o1.medium
+              # 2vCPU-32GB: p1.medium
+              # 4vCPU-8GB: p1.large
+              # 4vCPU-16GB: p2.large
+              # 4vCPU-32GB: p3.large
+              # 8vCPU-16GB: m1.xlarge
+              # 8vCPU-32GB: m2.xlarge
+              # 12vCPU-32GB: s1.large
+              
+# Vaughan Flavors
+              # 1vCPU-2GB: m1.small
+              # 1vCPU-4GB: n1.small
+              # 1vCPU-8GB: o1.small
+              # 2vCPU-4GB: m1.medium
+              # 2vCPU-8GB: n1.medium
+              # 2vCPU-16GB: o1.medium
+              # 2vCPU-32GB: p1.medium
+              # 4vCPU-8GB: m1.large
+              # 4vCPU-16GB: m1.large16
+              # 4vCPU-32GB: m1.large32
+              # 8vCPU-32GB: r1.large
+              # 12vCPU-32GB: s1.large

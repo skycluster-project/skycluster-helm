@@ -1,4 +1,4 @@
-{{ if .Values.t }}
+{{ if .Values.postInstall }}
 ---
 apiVersion: v1
 kind: ConfigMap

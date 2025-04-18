@@ -1,0 +1,147 @@
+providerMappings:
+  openstack:
+    regions:
+      - name: scinet
+        region: scinet
+        regionAlias: scinet
+        subnetCidr: 10.30.10.0/24
+        gatewayIp: 10.30.10.1
+        zones:
+          # There should be at least one zone specified as default for each region
+          - name: default
+            locationName: Toronto
+            defaultZone: true
+            type: cloud
+            defaults:
+              flavor: p2.large
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            flavors:
+              - name: m1.small
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: p1.large
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: p2.large
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: p3.large
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: m1.xlarge
+                vcpus: 8
+                ram: 16GB
+                price: 0.16
+              - name: m2.xlarge
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
+      - name: vaughan
+        region: vaughan
+        regionAlias: vaughan
+        subnetCidr: 10.29.10.0/24
+        gatewayIp: 10.29.10.1
+        zones:
+          # There should be at least one zone specified as default for each region
+          - name: default
+            locationName: Toronto
+            defaultZone: true
+            type: cloud
+            defaults:
+              flavor: m1.large16
+              image: ubuntu-22.04
+              min-vCPU: 1vCPU-2GB
+              max-vCPU: 12vCPU-32GB
+            flavors: 
+              - name: m1.small
+                vcpus: 1
+                ram: 2GB
+                price: 0.01
+              - name: n1.small
+                vcpus: 1
+                ram: 4GB
+                price: 0.02
+              - name: o1.small
+                vcpus: 1
+                ram: 8GB
+                price: 0.04
+              - name: m1.medium
+                vcpus: 2
+                ram: 4GB
+                price: 0.02
+              - name: n1.medium
+                vcpus: 2
+                ram: 8GB
+                price: 0.04
+              - name: o1.medium
+                vcpus: 2
+                ram: 16GB
+                price: 0.08
+              - name: p1.medium
+                vcpus: 2
+                ram: 32GB
+                price: 0.16
+              - name: m1.large
+                vcpus: 4
+                ram: 8GB
+                price: 0.08
+              - name: m1.large16
+                vcpus: 4
+                ram: 16GB
+                price: 0.16
+              - name: m1.large32
+                vcpus: 4
+                ram: 32GB
+                price: 0.32
+              - name: r1.large
+                vcpus: 8
+                ram: 32GB
+                price: 0.32
+              - name: s1.large
+                vcpus: 12
+                ram: 32GB
+                price: 0.48
+        images: 
+          ubuntu-24.04: ubuntu-24.04
+          ubuntu-22.04: ubuntu-22.04
+          ubuntu-20.04: ubuntu-20.04
+          ubuntu-18.04: ubuntu-18.04
