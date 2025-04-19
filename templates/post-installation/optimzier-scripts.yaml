@@ -13,21 +13,17 @@ data:
     printf "%s" "$TASKS" > /shared/tasks.csv
     printf "%s" "$TASKS_EDGES" > /shared/tasks-edges.csv
     printf "%s" "$TASKS_LOCATIONS" > /shared/tasks-locations.csv
-
-    # Need to have the following files created:
-    # /shared/providers.json
-    # /shared/providers-attr.json
-    # /shared/offerings.json
-    # These files are created as part of installation setup, using a installatino pod
     
-    kubectl get deployment -l skycluster.io/managed-by=skycluster -o json -n default \
-      | jq -c > /shared/deployments.json
-
-    kubectl get dataflowpolicy -o json -n default \
-      | jq -c > /shared/deployments-attr.json
-
+    kubectl get cm -n skycluster \
+      -l skycluster.io/config-type=provider-mappings,skycluster.io/managed-by=skycluster \
+      -o json > /shared/providers.json
+    
     kubectl get skycluster __SKYCLUSTER__NAME__ -o json -n default \
       | jq '.spec.skyComponents' | jq -c > /shared/skycluster-components.json
+
+    kubectl get configmaps -l \
+      skycluster.io/config-type=provider-vservices,skycluster.io/managed-by=skycluster \
+      -n skycluster -o json | jq -c > /shared/offerings.json
   main.sh: |
     . /venv/bin/activate
     
@@ -1011,7 +1007,18 @@ data:
       with open(providerAttr_json, 'w') as f:
         f.write(json.dumps(providerAttr))
               
-    def write_vservices_csv(offerings, filename):
+    def write_vservices_csv(providers, offerings, filename):
+      enabledProviders = []
+      for provider in providers['items']:
+        pLabels = provider['metadata']['labels']
+        providerName = provider['metadata']['name']
+        pName = pLabels['skycluster.io/provider-name']
+        pRegion = pLabels['skycluster.io/provider-region']
+        pZone = pLabels['skycluster.io/provider-zone']
+        pType = pLabels['skycluster.io/provider-type']
+        pId = f"{pName}.{pRegion}.{pZone}.{pType}"
+        enabledProviders.append(pId)
+
       with open(filename, 'w') as f:
         f.write(f"# header\n")
         for vservices in offerings['items']:
@@ -1020,8 +1027,53 @@ data:
           pRegion = labels['skycluster.io/provider-region']
           pZone = labels['skycluster.io/provider-zone']
           pType = labels['skycluster.io/provider-type']
+          pId = f"{pName}.{pRegion}.{pZone}.{pType}"
+          if pId not in enabledProviders:
+            continue
           for vservice, price in vservices['data'].items():
             f.write(f"{vservice}, {pName}.{pRegion}.{pZone}.{pType}, {price}, -1\n")
+
+    def filterEnabledProviders(providers):
+      items = []
+      enabledProvidersRegion = []
+      for provider in providers['items']:
+        pLabels = provider['metadata']['labels']
+        pType = pLabels['skycluster.io/provider-type']
+        if pType != 'global':
+          continue
+        
+        if "skycluster.io/provider-enabled" not in pLabels:
+          print(f"WARNING: provider {provider['metadata']['name']} does not have the label skycluster.io/provider-enabled")
+        pEnabled = pLabels['skycluster.io/provider-enabled']
+        providerName = pLabels['skycluster.io/provider-name']
+        pRegion = pLabels['skycluster.io/provider-region']
+        pId = f"{providerName}.{pRegion}"
+        if pEnabled == 'false':
+          continue
+        enabledProvidersRegion.append(pId)
+
+      for provider in providers['items']:
+        pLabels = provider['metadata']['labels']
+        pType = pLabels['skycluster.io/provider-type']
+        if pType == 'global':
+          continue
+        providerName = pLabels['skycluster.io/provider-name']
+        if "skycluster.io/provider-enabled" not in pLabels:
+          print(f"WARNING: provider {provider['metadata']['name']} does not have the label skycluster.io/provider-enabled")
+        pEnabled = pLabels['skycluster.io/provider-enabled']
+        pRegion = pLabels['skycluster.io/provider-region']
+        pZone = pLabels['skycluster.io/provider-zone']
+        pIdRegion = f"{providerName}.{pRegion}"
+        pId = f"{providerName}.{pRegion}.{pZone}.{pType}"
+        if pIdRegion not in enabledProvidersRegion:
+          # if the provider is not enabled, then we skip it
+          continue
+        if pEnabled == 'false':
+          continue
+        items.append(provider)
+
+      return {'items': items}
+
   csv_prepration.py: |
     import os
     import module_csv_prepration as dp
@@ -1031,7 +1083,6 @@ data:
     # check if the file exists
     csvFiles = [
       '/shared/providers.json', 
-      '/shared/providers-attr.json', 
       '/shared/offerings.json', 
     ]
 
@@ -1046,38 +1097,17 @@ data:
     with open('/shared/providers.json', 'r') as f:
       json_str = f.read()
       providers_json = json.loads(json_str)  
-      dp.write_providers_csv(providers_json, '/shared/providers.csv')
-      dp.write_provider_attr_csv(providers_json, '/shared/providers-attr.csv')
-    print("done writing providers.csv")
-    
-    with open('/shared/offerings.json', 'r') as f:
-      json_str = f.read()
-      offerings_json = json.loads(json_str)  
-      dp.write_vservices_csv(offerings_json, '/shared/vservices.csv')
-    print("done writing vservices.csv")
+      enabledProviders = dp.filterEnabledProviders(providers_json)
+      dp.write_providers_csv(enabledProviders, '/shared/providers.csv')
+      dp.write_provider_attr_csv(enabledProviders, '/shared/providers-attr.csv')
+      print("done writing providers.csv and providers-attr.csv")
 
-    # The following is not needed anymore as it is handled within the ILPTask controller
-    # # This is for deployments, deployments require skyvm.flavors
-    # with open('/shared/deployments.json', 'r') as f:
-    #   json_str = f.read()
-    #   deployments_json = json.loads(json_str)  
-    #   dp.write_tasks_csv(deployments_json, '/shared/tasks.csv')
-    # print("done writing tasks.csv")
+      with open('/shared/offerings.json', 'r') as f:
+        json_str = f.read()
+        offerings_json = json.loads(json_str)  
+        dp.write_vservices_csv(enabledProviders, offerings_json, '/shared/vservices.csv')
+      print("done writing vservices.csv")
 
-    # # Based on annotations set by the SkyCluster controller, we set locations
-    # with open('/shared/deployments.json', 'r') as f:
-    #   json_str = f.read()
-    #   deployments_json = json.loads(json_str)  
-    #   dp.write_tasks_loc_csv(deployments_json, '/shared/tasks-locations.csv')
-    # print("done writing tasks-locations.csv")
-
-    # # This step reads data from dataflow policy objects
-    # # and contains all deployments and Sky components
-    # with open('/shared/deployments-attr.json', 'r') as f:
-    #   json_str = f.read()
-    #   attr_json = json.loads(json_str)  
-    #   dp.write_deploy_attr_csv(attr_json, '/shared/tasks-edges.csv')
-    # print("done writing tasks-edges.csv")
   call_optimization.py: |
     import os
     from utils import check_dir_exists
