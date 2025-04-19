@@ -11,8 +11,14 @@ providerMappings:
         regionAlias: {{ .region }}
         continent: NorthAmerica
         enabled: {{ if .enabled }} true {{ else }} false {{ end }}
+        {{- if not (empty .labels) }}
+        labels: 
+          {{- range $k, $v := .labels }}
+          {{ $k }}: {{ $v }}
+          {{- end }}
+        {{- end }}
         extRef:
-          ext-SubnetV2-networking-v1alpha1: {{ index . "ext-os-public-subnet-name" }}
+          ext-ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
           ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
           ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
         zones:
@@ -22,6 +28,12 @@ providerMappings:
             defaultZone: {{ if eq $index 0 }} true {{ else }} false {{ end }}
             enabled: {{ if $zone.enabled }} true {{ else }} false {{ end }}
             type: {{ $zone.type }}
+            {{- if not (empty $zone.labels) }}
+            labels: 
+              {{- range $k, $v := $zone.labels }}
+              {{ $k }}: {{ $v }}
+              {{- end }}
+            {{- end }}   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -116,8 +128,14 @@ providerMappings:
         region: {{ .region }}
         regionAlias: {{ .region }}
         continent: NorthAmerica
+        {{- if not (empty .labels) }}
+        labels: 
+          {{- range $k, $v := .labels }}
+          {{ $k }}: {{ $v }}
+          {{- end }}
+        {{- end }}
         extRef:
-          ext-SubnetV2-networking-v1alpha1: {{ index . "ext-os-public-subnet-name" }}
+          ext-ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
           ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
           ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
         zones:
@@ -126,6 +144,12 @@ providerMappings:
             locationName: vaughan_{{ $zone.type }}_{{ $index | add 1 }}
             defaultZone: {{ if eq $index 0 }} true {{ else }} false {{ end }}
             type: {{ $zone.type }}
+            {{- if not (empty $zone.labels) }}
+            labels: 
+              {{- range $k, $v := $zone.labels }}
+              {{ $k }}: {{ $v }}
+              {{- end }}
+            {{- end }}   
             enabled: {{ if $zone.enabled }} true {{ else }} false {{ end }}
             defaults:
               flavor: m1.large16

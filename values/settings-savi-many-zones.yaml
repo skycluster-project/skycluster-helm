@@ -9,7 +9,7 @@ providerMappings:
         continent: NorthAmerica
         enabled:  true 
         extRef:
-          ext-SubnetV2-networking-v1alpha1: ext-net
+          ext-ext-os-public-subnet-name: ext-net
           ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
           ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
         zones:
@@ -18,6 +18,8 @@ providerMappings:
             defaultZone:  true 
             enabled:  true 
             type: cloud
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -104,6 +106,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: cloud
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -188,8 +192,8 @@ providerMappings:
           - name: zone-3
             locationName: scinet_cloud_3
             defaultZone:  false 
-            enabled:  true 
-            type: cloud
+            enabled:  false 
+            type: cloud   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -274,8 +278,8 @@ providerMappings:
           - name: zone-4
             locationName: scinet_cloud_4
             defaultZone:  false 
-            enabled:  true 
-            type: cloud
+            enabled:  false 
+            type: cloud   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -362,6 +366,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: nte
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -448,6 +454,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: nte
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -534,6 +542,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: nte
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -620,6 +630,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: nte
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -704,8 +716,8 @@ providerMappings:
           - name: zone-9
             locationName: scinet_nte_9
             defaultZone:  false 
-            enabled:  true 
-            type: nte
+            enabled:  false 
+            type: nte   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -790,8 +802,8 @@ providerMappings:
           - name: zone-10
             locationName: scinet_nte_10
             defaultZone:  false 
-            enabled:  true 
-            type: nte
+            enabled:  false 
+            type: nte   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -876,8 +888,8 @@ providerMappings:
           - name: zone-11
             locationName: scinet_nte_11
             defaultZone:  false 
-            enabled:  true 
-            type: nte
+            enabled:  false 
+            type: nte   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -962,8 +974,8 @@ providerMappings:
           - name: zone-12
             locationName: scinet_nte_12
             defaultZone:  false 
-            enabled:  true 
-            type: nte
+            enabled:  false 
+            type: nte   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1050,6 +1062,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1136,6 +1150,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1222,6 +1238,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1308,6 +1326,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-east   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1394,6 +1414,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1480,6 +1502,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1566,6 +1590,8 @@ providerMappings:
             defaultZone:  false 
             enabled:  true 
             type: edge
+            labels:
+              provider-category: us-west   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1650,8 +1676,8 @@ providerMappings:
           - name: zone-20
             locationName: scinet_edge_20
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1736,8 +1762,8 @@ providerMappings:
           - name: zone-21
             locationName: scinet_edge_21
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1822,8 +1848,8 @@ providerMappings:
           - name: zone-22
             locationName: scinet_edge_22
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1908,8 +1934,8 @@ providerMappings:
           - name: zone-23
             locationName: scinet_edge_23
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -1994,8 +2020,8 @@ providerMappings:
           - name: zone-24
             locationName: scinet_edge_24
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -2080,8 +2106,8 @@ providerMappings:
           - name: zone-25
             locationName: scinet_edge_25
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -2166,8 +2192,8 @@ providerMappings:
           - name: zone-26
             locationName: scinet_edge_26
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -2252,8 +2278,8 @@ providerMappings:
           - name: zone-27
             locationName: scinet_edge_27
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -2338,8 +2364,8 @@ providerMappings:
           - name: zone-28
             locationName: scinet_edge_28
             defaultZone:  false 
-            enabled:  true 
-            type: edge
+            enabled:  false 
+            type: edge   
             defaults:
               flavor: p2.large
               image: ubuntu-22.04
@@ -2427,19 +2453,19 @@ providerMappings:
           ubuntu-20.04: ubuntu-20.04
           ubuntu-18.04: ubuntu-18.04
       - name: vaughan
-        enabled:  true 
+        enabled:  false 
         region: vaughan
         regionAlias: vaughan
         continent: NorthAmerica
         extRef:
-          ext-SubnetV2-networking-v1alpha1: ext-net
+          ext-ext-os-public-subnet-name: ext-net
           ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
           ext-RouterV2-networking-v1alpha1: 712f6f07-374e-498a-99bd-e07a7a171cba
         zones:
           - name: zone-1
             locationName: vaughan_cloud_1
             defaultZone:  true 
-            type: cloud
+            type: cloud   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2514,7 +2540,7 @@ providerMappings:
           - name: zone-2
             locationName: vaughan_cloud_2
             defaultZone:  false 
-            type: cloud
+            type: cloud   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2589,7 +2615,7 @@ providerMappings:
           - name: zone-3
             locationName: vaughan_cloud_3
             defaultZone:  false 
-            type: cloud
+            type: cloud   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2664,7 +2690,7 @@ providerMappings:
           - name: zone-4
             locationName: vaughan_cloud_4
             defaultZone:  false 
-            type: cloud
+            type: cloud   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2739,7 +2765,7 @@ providerMappings:
           - name: zone-5
             locationName: vaughan_nte_5
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2814,7 +2840,7 @@ providerMappings:
           - name: zone-6
             locationName: vaughan_nte_6
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2889,7 +2915,7 @@ providerMappings:
           - name: zone-7
             locationName: vaughan_nte_7
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -2964,7 +2990,7 @@ providerMappings:
           - name: zone-8
             locationName: vaughan_nte_8
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3039,7 +3065,7 @@ providerMappings:
           - name: zone-9
             locationName: vaughan_nte_9
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3114,7 +3140,7 @@ providerMappings:
           - name: zone-10
             locationName: vaughan_nte_10
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3189,7 +3215,7 @@ providerMappings:
           - name: zone-11
             locationName: vaughan_nte_11
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3264,7 +3290,7 @@ providerMappings:
           - name: zone-12
             locationName: vaughan_nte_12
             defaultZone:  false 
-            type: nte
+            type: nte   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3339,7 +3365,7 @@ providerMappings:
           - name: zone-13
             locationName: vaughan_edge_13
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3414,7 +3440,7 @@ providerMappings:
           - name: zone-14
             locationName: vaughan_edge_14
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3489,7 +3515,7 @@ providerMappings:
           - name: zone-15
             locationName: vaughan_edge_15
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3564,7 +3590,7 @@ providerMappings:
           - name: zone-16
             locationName: vaughan_edge_16
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3639,7 +3665,7 @@ providerMappings:
           - name: zone-17
             locationName: vaughan_edge_17
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3714,7 +3740,7 @@ providerMappings:
           - name: zone-18
             locationName: vaughan_edge_18
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3789,7 +3815,7 @@ providerMappings:
           - name: zone-19
             locationName: vaughan_edge_19
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3864,7 +3890,7 @@ providerMappings:
           - name: zone-20
             locationName: vaughan_edge_20
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -3939,7 +3965,7 @@ providerMappings:
           - name: zone-21
             locationName: vaughan_edge_21
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4014,7 +4040,7 @@ providerMappings:
           - name: zone-22
             locationName: vaughan_edge_22
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4089,7 +4115,7 @@ providerMappings:
           - name: zone-23
             locationName: vaughan_edge_23
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4164,7 +4190,7 @@ providerMappings:
           - name: zone-24
             locationName: vaughan_edge_24
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4239,7 +4265,7 @@ providerMappings:
           - name: zone-25
             locationName: vaughan_edge_25
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4314,7 +4340,7 @@ providerMappings:
           - name: zone-26
             locationName: vaughan_edge_26
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4389,7 +4415,7 @@ providerMappings:
           - name: zone-27
             locationName: vaughan_edge_27
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16
@@ -4464,7 +4490,7 @@ providerMappings:
           - name: zone-28
             locationName: vaughan_edge_28
             defaultZone:  false 
-            type: edge
+            type: edge   
             enabled:  true 
             defaults:
               flavor: m1.large16

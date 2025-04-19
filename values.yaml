@@ -474,6 +474,7 @@ providerMappings:
           - name: ca-central-1a
             locationName: Toronto
             defaultZone: true
+            enabled: true
             type: cloud
             defaults:
               flavor: 2vCPU-4GB
