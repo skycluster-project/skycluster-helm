@@ -18,7 +18,7 @@ providerMappings:
           {{- end }}
         {{- end }}
         extRef:
-          ext-ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
+          ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
           ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
           ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
         zones:
@@ -135,7 +135,7 @@ providerMappings:
           {{- end }}
         {{- end }}
         extRef:
-          ext-ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
+          ext-os-public-subnet-name: {{ index . "ext-os-public-subnet-name" }}
           ext-ProjectV3-identity-v1alpha1: {{ index . "ext-ProjectV3-identity-v1alpha1"}}
           ext-RouterV2-networking-v1alpha1: {{ index . "ext-RouterV2-networking-v1alpha1"}}
         zones:

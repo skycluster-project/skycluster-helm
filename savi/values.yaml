@@ -37,11 +37,11 @@ savi:
           labels:
             provider-category: us-east
         - type: nte
-          enabled: true  
+          enabled: false  
           labels:
             provider-category: us-west
         - type: nte
-          enabled: true  
+          enabled: false  
           labels:
             provider-category: us-west
         - type: nte
@@ -63,23 +63,23 @@ savi:
         - type: edge
           enabled: true 
           labels:
+            provider-category: us-west
+        - type: edge
+          enabled: true 
+          labels:
+            provider-category: us-west
+        - type: edge
+          enabled: false 
+          labels:
+            provider-category: us-west
+        - type: edge
+          enabled: false 
+          labels:
             provider-category: us-east
         - type: edge
-          enabled: true 
+          enabled: false 
           labels:
             provider-category: us-east
-        - type: edge
-          enabled: true 
-          labels:
-            provider-category: us-west
-        - type: edge
-          enabled: true 
-          labels:
-            provider-category: us-west
-        - type: edge
-          enabled: true 
-          labels:
-            provider-category: us-west
         - type: edge
           enabled: false 
         - type: edge
@@ -99,7 +99,7 @@ savi:
         - type: edge
           enabled: false 
     - region: vaughan
-      enabled: false
+      enabled: true
       ext-os-public-subnet-name: ext-net
       ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
       ext-RouterV2-networking-v1alpha1: 712f6f07-374e-498a-99bd-e07a7a171cba
@@ -107,56 +107,56 @@ savi:
       - type: cloud
         enabled: true
       - type: cloud
-        enabled: true
+        enabled: false
       - type: cloud
-        enabled: true
+        enabled: false
       - type: cloud
-        enabled: true
+        enabled: false
       - type: nte
         enabled: true
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: nte
-        enabled: true
+        enabled: false
       - type: edge
         enabled: true
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false
       - type: edge
-        enabled: true
+        enabled: false

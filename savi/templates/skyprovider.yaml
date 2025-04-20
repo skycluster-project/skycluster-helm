@@ -1,0 +1,45 @@
+
+{{- if .Values.providers.private.openstack.enabled }}
+{{- if .Values.generateTemplate.skyprovider }}
+  {{- range .Values.savi.locations }}
+    {{- $region := .region }}
+    {{- range $index, $zone := .zones }}
+      {{- if not (has $index  (list 2 3  8 9 10 11   16 17 18 19   20 21 22 23 24 25 26 27)) }}
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: SkyProvider
+metadata:
+  name: gw-{{ $region | lower }}-{{ $zone.type }}-{{ $index | add 1 }}
+  namespace: skytest
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/provider-name: os
+    skycluster.io/provider-region: {{ $region | lower }}
+    skycluster.io/provider-zone: zone-{{ $index | add 1 }}
+    skycluster.io/ext-os-public-subnet-name: ext-net
+    skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+    {{- if eq $region "scinet" }}
+    skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+    {{- end }}
+    {{- if eq $region "vaughan" }}
+    skycluster.io/ext-RouterV2-networking-v1alpha1: 712f6f07-374e-498a-99bd-e07a7a171cba
+    {{- end }}
+spec: 
+  forProvider:
+    {{- if eq $region "scinet" }}
+    vpcCidr: 10.{{ $index | add 50 }}.1.0/24
+    {{- end }}
+    {{- if eq $region "vaughan" }}
+    vpcCidr: 10.{{ $index | add 150 }}.1.0/24
+    {{- end }}
+    gateway:
+      flavor: 8vCPU-32GB #
+  providerRef:
+    providerName: os
+    providerRegion: {{ $region }}
+    providerZone: zone-{{ $index | add 1 }}
+---
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}
