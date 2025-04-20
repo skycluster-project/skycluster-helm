@@ -154,6 +154,31 @@ data:
             iptables -tnat -D ts-postrouting -m mark --mark 0x40000/0xff0000 -j MASQUERADE
           fi
           echo $(date) >> /root/tailscale-setup.log
+      - path: /usr/local/bin/ping-check.sh
+        owner: root:root
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+          echo $(date) >> /root/ping-check.log
+
+          ping_ip() {
+            local ip="$1"
+            nc -z -w2 "$ip" 22
+            if [ $? -eq 0 ]; then
+              echo "$ip is reachable =)"
+            else
+              nc -z -w1 "$ip" 22
+              if [ $? -ne 0 ]; then
+                echo "-- $ip IS NOT REACHABLE."
+              else
+                echo "$ip is reachable =)"
+              fi
+            fi
+          }
+
+          for ii in `sudo tailscale status | awk '{print $2}' | tail -n +2`; do 
+            IP=`sudo tailscale ip --4 $ii` && ping_ip $IP >> /root/ping-check.log; 
+          done
       - path: /etc/bird/bird.conf
         owner: root:root
         permissions: '644'
@@ -224,12 +249,16 @@ data:
       - /usr/local/bin/pre-install.sh
       - /usr/local/bin/install-tailscale.sh
       - /usr/local/bin/setup-tailscale.sh
-      - 'echo "* * * * * sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
-      - 'echo "* * * * * sleep 10 && sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
-      - 'echo "* * * * * sleep 20 && sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
-      - 'echo "* * * * * sleep 30 && sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
-      - 'echo "* * * * * sleep 40 && sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
-      - 'echo "* * * * * sleep 50 && sudo /usr/local/bin/setup-tailscale.sh" | sudo crontab -u root -'
+      - |
+        crontab -u root -l 2>/dev/null > /tmp/mycron || true
+        echo "*/10 * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        echo "* * * * * sleep 10 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        echo "* * * * * sleep 20 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        echo "* * * * * sleep 30 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        echo "* * * * * sleep 40 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        echo "* * * * * sleep 50 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        crontab -u root /tmp/mycron
       - /usr/local/bin/setup-bgp.sh
       - /etc/networkd-dispatcher/routable.d/50-tailscale
       - /usr/local/bin/install-node-exporter.sh
