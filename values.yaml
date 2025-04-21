@@ -63,7 +63,7 @@ providerMappings:
         region: us-east-1
         continent: NorthAmerica
         regionAlias: us-east
-        enabled: false
+        enabled: true
         zones:
           # We need to ensure for each region, there is one zone
           # with defaultZone set to true
@@ -116,7 +116,7 @@ providerMappings:
           - name: us-east-1-wl1-nyc-wlz-1
             locationName: NewYork
             defaultZone: false
-            enabled: true
+            enabled: false
             type: nte
             defaults:
               flavor: 2vCPU-4GB
@@ -142,7 +142,7 @@ providerMappings:
           - name: us-east-1-wl1-iah-wlz-1
             locationName: Houston
             defaultZone: false
-            enabled: true
+            enabled: false
             type: nte
             defaults:
               flavor: 2vCPU-4GB
@@ -195,7 +195,7 @@ providerMappings:
           - name: us-east-1-phl-1a
             locationName: Philadelphia
             defaultZone: false
-            enabled: true
+            enabled: false
             borderGroup: us-east-1-phl-1
             type: edge
             defaults:
@@ -221,7 +221,7 @@ providerMappings:
                 price: 0.09
           - name: us-east-1-iah-2a
             defaultZone: false
-            enabled: true
+            enabled: false
             borderGroup: us-east-1-iah-2
             locationName: Houston
             type: edge
@@ -536,7 +536,7 @@ providerMappings:
         region: us-east1
         continent: NorthAmerica
         regionAlias: us-east
-        enabled: false
+        enabled: true
         zones:
           - name: b
             locationName: SouthCarolina
@@ -555,6 +555,11 @@ providerMappings:
                 step: 10GB
                 price: 0.8
             flavors:
+              - name: e2-small-spot
+                flavor: 2vCPU-2GB-spot
+                vcpus: 2
+                ram: 2GB
+                price: 0.008
               - name: e2-small
                 flavor: 2vCPU-2GB
                 vcpus: 2
@@ -637,6 +642,7 @@ providerMappings:
               - name: Internet
                 type: Internet 
                 price: 0.085
+
   azure:
     regions:
       - name: southafricanorth
@@ -716,7 +722,7 @@ providerMappings:
         locationName: Illinois
         region: northcentralus
         regionAlias: us-northcentral
-        enabled: false
+        enabled: true
         zones:
           - name: default
             locationName: Illinois
