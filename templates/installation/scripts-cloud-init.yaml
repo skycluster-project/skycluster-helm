@@ -140,8 +140,11 @@ data:
           echo "--login-server $LOGIN_URL" >> /root/tailscale-setup.log
           echo "--auth-key $AUTH_KEY" >> /root/tailscale-setup.log
           echo "--hostname $HOSTNAME" >> /root/tailscale-setup.log
+          
+          # There is a bug that prevents node registration with advertise-routes in the first run
+          # See https://github.com/juanfont/headscale/issues/2485
+          # We handle this by running a script in the server side for now.
           while true; do
-            # Run the tailscale up command
             if tailscale up --login-server $LOGIN_URL --auth-key $AUTH_KEY --hostname $HOSTNAME --advertise-routes __SUBNETCIDR__ --accept-routes; then
               echo "Tailscale connected successfully" >> /root/tailscale-setup.log
               break
@@ -251,7 +254,10 @@ data:
       - /usr/local/bin/setup-tailscale.sh
       - |
         crontab -u root -l 2>/dev/null > /tmp/mycron || true
-        echo "*/10 * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sleep 15 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sleep 30 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sleep 45 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
         echo "* * * * * sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
         echo "* * * * * sleep 10 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
         echo "* * * * * sleep 20 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron

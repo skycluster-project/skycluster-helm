@@ -139,8 +139,6 @@ data:
           drawArgs['font_size'] = fontSizes
         nx.draw_networkx_edge_labels(G, pos, edge_labels={(u, v): G.edges[u, v][edgeLabelKey] for u, v in G.edges()}, **drawArgs)
       
-      
-      
       plt.savefig(f'{outputDir}/{fileName}.png', format='png')  # You can change the file name and format
       plt.clf()  # Clears the current figure content
       plt.close()
@@ -172,28 +170,120 @@ data:
         return 0
       
     def convert_to_GB(time_str):
-      # Dictionary to define conversion factors to milliseconds
+      # Dictionary to define conversion factors to TB
       conversion_factors = {
-        'GB/s': 1,
-        'MB/s': 1000,
+        'TB': 1000,
+        'GB': 1,
+        'MB': 0.001,
       }
       
       # Extract numeric value and unit from the input string
       import re
       match = re.match(r'(\d+(?:\.\d+)?)(\D+)', time_str)
       if not match:
-        # raise ValueError("Invalid time format")
+        # Return 0 for invalid format
         return 0
       
       value, unit = match.groups()
       value = float(value)
       
-      # Convert to milliseconds
+      # Convert to TB
       if unit in conversion_factors:
         return value * conversion_factors[unit]
       else:
-        # raise ValueError("Unsupported time unit")
+        # Return 0 for unsupported unit
         return 0
+
+    def generate_replicated_task_graph(outputPath, providers, tasks, c, y, mapping, mappingRev):
+      class Dag:
+        def __init__(self):
+          self.nodes = []
+          self.name = None
+          self.edgeLatencies = {}
+          self.egressCost = {} # also used for dataRate
+          self.graph = nx.DiGraph()
+          self.location = {}
+
+        def add(self, n):
+          self.graph.add_node(n)
+          self.nodes.append(n)
+
+        def remove(self, n):
+          self.nodes.remove(n)
+          self.graph.remove_node(n)
+          
+        def add_edge(self, op1, op2, latency=0, egressCost=0):
+          assert op1 in self.graph.nodes
+          assert op2 in self.graph.nodes
+          self.graph.add_edge(op1, op2)
+          if not op1.name in self.edgeLatencies:
+            self.edgeLatencies[op1.name] = {}
+          self.edgeLatencies[op1.name][op2.name] = latency
+          if not op1.name in self.egressCost:
+            self.egressCost[op1.name] = {}
+          self.egressCost[op1.name][op2.name] = 0 if egressCost is None else egressCost
+
+        def get_graph(self):
+          return self.graph
+
+        def get_nodes(self):
+          return self.nodes
+
+        def get_edges(self):
+          return self.graph.edges
+          
+      class ReplicatedTask:
+        def __init__(self, name, node, num=None):
+          self.name = name
+          self.task = node  # node itself
+          self.replicaNum = 1 if num is None else num
+          self.pName = None
+          self.pCloudName = None
+          self.pRegion = None
+      
+      depTaskDag = Dag()
+      # mapping from task name to the provider to the replicated task name
+      # taskName -> {providerName -> replicatedTaskName}
+      from collections import defaultdict
+      replicatedNodes = defaultdict(dict) 
+      for tname, cv in c.items():
+        iReplicCount = 1
+        for u, v in cv.items():
+          if v.varValue:
+            pp = providers[mappingRev[u]]
+            tt = ReplicatedTask(f"{tname}_{iReplicCount}", tasks[tname], iReplicCount)
+            tt.pName = pp.name
+            tt.pCloudName = pp.cName
+            tt.pRegion = f'{pp.regionAlias}\n{pp.pType}'
+            replicatedNodes[tname][mappingRev[u]] = tt
+            depTaskDag.add(tt)
+            
+      for iName, y_i in y.items():
+        for jName, y_ij in y_i.items():
+          for uvName, l in y_ij.items():
+            if l.varValue:
+              t1_name, t2_name = uvName.split('|')[0].split(',')[0], uvName.split('|')[0].split(',')[1]
+              t1_locRev, t2_locRev = uvName.split('|')[1].split(',')[0], uvName.split('|')[1].split(',')[1]
+              t1_loc, t2_loc = mappingRev[t1_locRev], mappingRev[t2_locRev]
+              depTaskDag.add_edge(replicatedNodes[t1_name][t1_loc], replicatedNodes[t2_name][t2_loc], 0, 0)
+      
+      for ss, tt in depTaskDag.get_edges():
+        # print(f"{ss.task.name} -> {tt.task.name}")
+        ss_task_name, tt_task_name = ss.task.name, tt.task.name
+        ss_pName, tt_pName = ss.pName, tt.pName
+        depTaskDag.add_edge(replicatedNodes[ss_task_name][ss_pName], replicatedNodes[tt_task_name][tt_pName], 1, 1)
+        
+      allRegions = set([n.pRegion for n in depTaskDag.get_nodes()])
+      colorMap = {v: plt.cm.tab20(i) for i, v in enumerate(allRegions)}
+      nodeColors = [colorMap[n.pRegion] for n in depTaskDag.get_nodes()]
+      nodeLabels = {n:f'{n.name}\n{n.pCloudName}.{n.pRegion}' for n in depTaskDag.graph.nodes()}
+      
+      timestamp = time.strftime("%Y%m%d_%H%M%S")
+      print(f"Drawing the graph: graph_{timestamp}.png")
+      draw_this_graph(
+        depTaskDag.get_graph(), outputPath, f"graph_{timestamp}", 
+        nodeLabels=nodeLabels , fontSizes=7, nodeColors=nodeColors, 
+        nodeSize=2000, spring_k=2.5)
   module_data.py: |
     from collections import defaultdict
     import json
@@ -311,7 +401,9 @@ data:
       filtered_providers = providers
       for k, v in filter.items():
         if k == 'providerName':
-          filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.name == v}
+          # TODO: we should distinguish between the provider name and the provider cloud name
+          # currently we only support provider cloud name, i.e. aws, azure, gcp, ...
+          filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.cName == v}
         if k == 'providerType':
           filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.pType == v}
         if k == 'providerRegionAlias':
@@ -656,8 +748,8 @@ data:
               selectedService = min(svcCosts, key=lambda x: x[1])[0]
               # print(f"  {tName} service {selectedService[0].name}, offered by {u} with cost: {selectedService[0].get_costs()[u]}")
               # The cost is typically is in the form of 0.001, 
-              # so we multiply it by 10**3 to get the cost as an integer
-              k_t_u[tName][mapping[u]] += int(float(selectedService[0].get_costs()[u])*(10**3)) * int(selectedService[1])
+              # so we multiply it by 10**5 to get the cost as an integer
+              k_t_u[tName][mapping[u]] += int(float(selectedService[0].get_costs()[u])*(10**5)) * int(selectedService[1])
             else:
               # the service is not offered by u, so let's set the cost to something large enough
               k_t_u[tName][mapping[u]] += (10**8) * int(e[1])
@@ -676,9 +768,8 @@ data:
         # print(i,j,l,d)
         for u in tasks[i].permittedLocData:
           for v in tasks[j].permittedLocData:
-            # print(f"  {mapping[u]},{mapping[v]}: {egressCosts[u][v]}, {pLatencies[u][v]}")
-            # same as deploy cost, we multiply the cost by 10**3 to get an integer
-            objective += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] * int(d) * int(float(egressCosts[u][v])*(10**3)) * compare(float(l), float(pLatencies[u][v]))
+            # same as deploy cost, we multiply the cost by 10**5 to get an integer
+            objective += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] * int(d) * int(float(egressCosts[u][v])*(10**5)) * compare(float(l), float(pLatencies[u][v]))
       prob += objective
       return prob
 
@@ -957,13 +1048,14 @@ data:
         for provider in providers['items']:
           providerName = provider['metadata']['name']
           pLabels = provider['metadata']['labels']
+          pCloudName = pLabels['skycluster.io/provider-name']
           pRegionAlias = pLabels['skycluster.io/provider-region-alias']
           pRegion = pLabels['skycluster.io/provider-region']
           pZone = pLabels['skycluster.io/provider-zone']
           pType = pLabels['skycluster.io/provider-type']
           if pType == 'global' or pZone == 'global':
             continue
-          f.write(f"{providerName}, {providerName}, {pRegionAlias}, {pZone}, {pType}, {pRegion}\n")
+          f.write(f"{pCloudName}, {providerName}, {pRegionAlias}, {pZone}, {pType}, {pRegion}\n")
 
     def write_provider_attr_csv(providers, filename):
       providerAttr = defaultdict(dict)
@@ -974,6 +1066,7 @@ data:
           providerName = provider['metadata']['name']
           pLabels = provider['metadata']['labels']
           pZone = pLabels['skycluster.io/provider-zone']
+          pCloudName = pLabels['skycluster.io/provider-name']
           pContinent = pLabels['skycluster.io/provider-continent']
           pType = pLabels['skycluster.io/provider-type']
           pRegion = pLabels['skycluster.io/provider-region']
@@ -986,19 +1079,29 @@ data:
           
           for pDst in providers['items']:
             pDstName = pDst['metadata']['name']
+            pDstCloudName = pDst['metadata']['labels']['skycluster.io/provider-name']
             pDstType = pDst['metadata']['labels']['skycluster.io/provider-type']
             pDstContinent = pLabels['skycluster.io/provider-continent']
             pDstRegion = pDst['metadata']['labels']['skycluster.io/provider-region']
+            pDstZone = pDst['metadata']['labels']['skycluster.io/provider-zone']
             transferCosts = 0
             latency = 0
             if provider == pDst or pDstType == 'global':
               continue
-            if 'egressDataTransfer-internet' not in pData:
+            # if data transfer is between two providers of the same type, region and zone
+            # the cost is 0, but with different regions, or zones,
+            # we will set the transfer cost to 0.02 (aws reference)
+            # if data transfer is between two providers of different types 
+            # we use the transfer cost to the internet
+            if pCloudName == pDstCloudName and pRegion == pDstRegion and pZone == pDstZone:
+              transferCosts = 0
+            elif pCloudName == pDstCloudName:
+              transferCosts = 0.02
+            elif 'egressDataTransfer-internet' not in pData:
               transferCosts = 0
             else:
               transferCosts = pData['egressDataTransfer-internet']
-            # We calculate latency automatically, but in the beginning we will set it manually
-            latency = get_latency(pContinent, pDstContinent, pRegion, pDstRegion, pType, pDstType)
+            # TODO: We calculate latency automatically, but in the beginning we will set it manually
             providerAttr[providerName][pDstName] = {
               'latency': latency,
               'transferCosts': transferCosts
@@ -1073,7 +1176,6 @@ data:
         items.append(provider)
 
       return {'items': items}
-
   csv_prepration.py: |
     import os
     import module_csv_prepration as dp
@@ -1107,7 +1209,6 @@ data:
         offerings_json = json.loads(json_str)  
         dp.write_vservices_csv(enabledProviders, offerings_json, '/shared/vservices.csv')
       print("done writing vservices.csv")
-
   call_optimization.py: |
     import os
     from utils import check_dir_exists
@@ -1186,15 +1287,27 @@ data:
       print(f"CPU time:\t{round(prob.solutionCpuTime, 4)}")
       open(projectPath + '/optimization-result.txt', 'w').write(status)
       if status != "Infeasible":
-        print(f"Objective value:\t${float(prob.objective.value()/(10**4))}")
+        c_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('c_'))/(10**5)
+        y_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('y_'))/(10**5)
+        deployCost = prob.objective.value()/(10**5)
+        print(f"Objective value:\t${float(deployCost)}")
+        print(f"Objective value (c):\t${float(c_objective)}")
+        print(f"Objective value (y):\t${float(y_objective)}")
+        print(f"Sum Objectives:\t${float(c_objective + y_objective)}")
         print("dumping the deploy plan...")
-        dump_json(projectPath, "deploy-plan.json",  providers, c, y, mappingRev, tasks)
+        dump_json(projectPath, "deploy-plan.json",  providers, c, y, mappingRev, tasks, deployCost, c_objective, y_objective)
+
+        from utils import generate_replicated_task_graph
+        generate_replicated_task_graph(projectPath, providers, tasks, c, y, mapping, mappingRev)
       else:
         print("Infeasible problem. Skipping writing deploy plan.")
       print("Done.")
 
-    def dump_json(outputPath, fileName, providers, c, y, mappingRev, tasks):
+    def dump_json(outputPath, fileName, providers, c, y, mappingRev, tasks, cost, c_cost, y_cost):
       deployPlan = {}
+      deployPlan['cost'] = str(cost)
+      deployPlan['deployCost'] = str(c_cost)
+      deployPlan['transferCost'] = str(y_cost)
       deployPlan['components'] = []
       for tname, cv in c.items():
         iReplicCount = 1
