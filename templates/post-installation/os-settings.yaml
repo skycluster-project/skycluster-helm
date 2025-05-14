@@ -105,6 +105,10 @@ data:
                 {{- range $v4 := $v }}
   {{ printf "skyvm_storage_%s" ($v4.name) }}: {{ $v4.price | quote }}
                 {{- end }}
+              {{- else if eq $k "pubSub" }}
+                {{- range $v4 := $v }}
+  {{ printf "pubsub_%s" ($v4.name) }}: {{ $v4.price | quote }}
+                {{- end }}
               {{- end }}
           {{- end }}
         {{- end }}

@@ -254,7 +254,7 @@ data:
             tt = ReplicatedTask(f"{tname}_{iReplicCount}", tasks[tname], iReplicCount)
             tt.pName = pp.name
             tt.pCloudName = pp.cName
-            tt.pRegion = f'{pp.regionAlias}\n{pp.pType}'
+            tt.pRegion = f'{pp.regionAlias}\n{pp.zone}.{pp.pType}'
             replicatedNodes[tname][mappingRev[u]] = tt
             depTaskDag.add(tt)
             
@@ -985,43 +985,195 @@ data:
   module_csv_prepration.py: |
     from collections import defaultdict
     import json
+    
+    def cloud_cloud_latency(region1, region2):
+      latency_matrix = {
+        "us-west": {
+            "us-west": 0, "us-north-central": 30, "us-south-central": 40, "us-north-east": 60, "us-east": 70,
+            "ca-central": 50, "ca-east": 80,
+            "eu-central": 120, "af-north": 240, "asia-east": 150
+        },
+        "us-north-central": {
+            "us-west": 30, "us-north-central": 0, "us-south-central": 20, "us-north-east": 30, "us-east": 40,
+            "ca-central": 30, "ca-east": 60,
+            "eu-central": 90, "af-north": 210, "asia-east": 180
+        },
+        "us-south-central": {
+            "us-west": 40, "us-north-central": 20, "us-south-central": 0, "us-north-east": 40, "us-east": 50,
+            "ca-central": 40, "ca-east": 70,
+            "eu-central": 100, "af-north": 220, "asia-east": 190
+        },
+        "us-north-east": {
+            "us-west": 60, "us-north-central": 30, "us-south-central": 40, "us-north-east": 0, "us-east": 20,
+            "ca-central": 30, "ca-east": 30,
+            "eu-central": 90, "af-north": 210, "asia-east": 180
+        },
+        "us-east": {
+            "us-west": 70, "us-north-central": 40, "us-south-central": 50, "us-north-east": 20, "us-east": 0,
+            "ca-central": 40, "ca-east": 20,
+            "eu-central": 90, "af-north": 200, "asia-east": 190
+        },
+        "ca-central": {
+            "us-west": 50, "us-north-central": 30, "us-south-central": 40, "us-north-east": 30, "us-east": 40,
+            "ca-central": 0, "ca-east": 30,
+            "eu-central": 100, "af-north": 220, "asia-east": 190
+        },
+        "ca-east": {
+            "us-west": 80, "us-north-central": 60, "us-south-central": 70, "us-north-east": 30, "us-east": 20,
+            "ca-central": 30, "ca-east": 0,
+            "eu-central": 90, "af-north": 200, "asia-east": 190
+        },
+        "eu-central": {
+            "us-west": 120, "us-north-central": 90, "us-south-central": 100, "us-north-east": 90, "us-east": 90,
+            "ca-central": 100, "ca-east": 90,
+            "eu-central": 0, "af-north": 150, "asia-east": 180
+        },
+        "af-north": {
+            "us-west": 240, "us-north-central": 210, "us-south-central": 220, "us-north-east": 210, "us-east": 200,
+            "ca-central": 220, "ca-east": 200,
+            "eu-central": 150, "af-north": 0, "asia-east": 270
+        },
+        "asia-east": {
+            "us-west": 150, "us-north-central": 180, "us-south-central": 190, "us-north-east": 180, "us-east": 190,
+            "ca-central": 190, "ca-east": 190,
+            "eu-central": 180, "af-north": 270, "asia-east": 0
+        }
+      }
 
-    def get_latency(src_continent, dst_continent, src_region, dst_region, src_type, dst_type):
+      # we consider scinet and vaughan as ca-central
+      if region1 == "scinet" or region1 == "vaughan":
+        region1 = "ca-central"
+      if region2 == "scinet" or region2 == "vaughan":
+        region2 = "ca-central"
+      # consider us-central as us-north-central
+      if region1 == "us-central":
+        region1 = "us-north-central"
+      if region2 == "us-central":
+        region2 = "us-north-central"
+      return latency_matrix.get(region1, {}).get(region2, None)
+
+    # same continent, same region
+    def cloud_edge_latency(region1, region2, edgeLocationName):
+      latency_map = {
+          "philadelphia": 5,
+          "boston": 14.5,
+          "houston": 31,
+          "dallas": 31.5,
+          "portland": 6.5,
+          "seattle": 7,
+          "losangeles": 24
+      }
+      
+      if region1 == region2:
+        # If there is no measurement for the location, return a default value
+        return latency_map.get(edgeLocationName.lower(), 35)
+      latency = cloud_cloud_latency(region1, region2)
+      if latency is None:
+        raise ValueError("Unsupported region", region1, region2)
+      return latency
+
+    def nte_edge_latency(region1, region2, nteLocName, edgeLocationName):
+      latency_matrix = {
+          "houston": {
+            "houston": 2.5,
+            "dallas": 11.5,
+          }, 
+          "lasvegas": {
+            "losangeles": 7.5
+          },
+          "newyork": {
+            "boston": 14.5,
+            "philadelphia": 9,
+          },
+          "seattle": {
+            "portland": 7,
+            "seattle": 3,
+          }
+      }
+      if region1 == region2: 
+        return latency_matrix.get(nteLocName.lower(), {}).get(edgeLocationName.lower(), 15)
+      latency = cloud_cloud_latency(region1, region2)
+      if latency is None:
+        raise ValueError("Unsupported region", region1, region2)
+      return latency
+
+    def cloud_nte_latency(region1, region2, nteLocationName):
+      latency_map = {
+        "newyork": 13.5,
+        "houston": 32,
+        "washington": 39.5,  
+        "seattle": 9,
+        "lasvegas": 32,
+        "sfbayarea": 35.5,
+        "phoenix": 36.5
+      }
+      
+      if region1 == region2:
+        return latency_map.get(nteLocationName.lower(), 40)
+      latency = cloud_cloud_latency(region1, region2)
+      if latency is None:
+        raise ValueError("Unsupported region", region1, region2)
+      return latency
+
+    # same continent, same region (they are in close proximity)
+    # return the general latency of 20ms. If edges are in two different regions, 
+    # return the average latency of cloud-cloud latency in the same continent
+    # Ref: Measurements/outputs/graphs/g_ex1/g_same_region/avg_same_region.pdf
+    def edge_edge_latency(region1, region2):
+      if region1 == region2: 
+        return 20
+      latency = cloud_cloud_latency(region1, region2)
+      if latency is None:
+        raise ValueError("Unsupported region", region1, region2)
+      return latency
+
+    # Similar to edge_edge_latency, but for NTEs
+    # Ref: Measurements/outputs/graphs/g_ex1/g_same_region/avg_same_region.pdf
+    def nte_nte_latency(region1, region2): 
+      if region1 == region2: 
+        return 50
+      latency = cloud_cloud_latency(region1, region2)
+      if latency is None:
+        raise ValueError("Unsupported region", region1, region2)
+      return latency
+
+    # The src_region and dst_region refer to region aliases
+    def get_latency(src_region, dst_region, src_type, dst_type, src_locName, dst_locName):
       # us-east, us-west, cloud, edge
-      def cloud_cloud_latency(same_continent):
-        if same_continent:
-          return 100
-        else:
-          return 200
-      def cloud_edge_latency(): # same continent, same region
-        return 15
-      def cloud_nte_latency(): # same continent, same region
-        return 25
-      def edge_edge_latency(): # same continent, same region (they are in close proximity)
-        return 6
-      def nte_nte_latency(): # same continent, same region
-        return 10
-      def nte_edge_latency():
-        return 8
-      same_region = src_region == dst_region
-      same_continent = src_continent == dst_continent
+      # same_region = src_region == dst_region
+      # same_continent = src_continent == dst_continent
       if src_type == 'cloud' and dst_type == 'cloud':
-        total_latency = cloud_cloud_latency(same_continent)
+        total_latency = cloud_cloud_latency(src_region, dst_region)
+        if total_latency is None:
+          raise ValueError("Unsupported region", src_region, dst_region)
         return round(total_latency, 2)
-      elif (src_type == 'cloud' and dst_type == 'nte') or (src_type == 'nte' and dst_type == 'cloud'):
-        total_latency = cloud_nte_latency()
+      
+      elif (src_type == 'cloud' and dst_type == 'nte'):
+        total_latency = cloud_nte_latency(src_region, dst_region, dst_locName)
         return round(total_latency, 2)
-      elif (src_type == 'cloud' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'cloud'):
-        total_latency = cloud_edge_latency()
+      elif (src_type == 'nte' and dst_type == 'cloud'):
+        total_latency = cloud_nte_latency(src_region, dst_region, src_locName)
         return round(total_latency, 2)
+      
+      elif (src_type == 'cloud' and dst_type == 'edge'):
+        total_latency = cloud_edge_latency(src_region, dst_region, dst_locName)
+        return round(total_latency, 2)
+      elif (src_type == 'edge' and dst_type == 'cloud'):
+        total_latency = cloud_edge_latency(src_region, dst_region, src_locName)
+        return round(total_latency, 2)
+      
       elif src_type == 'edge' and dst_type == 'edge':
-        total_latency = edge_edge_latency()
+        total_latency = edge_edge_latency(src_region, dst_region)
         return round(total_latency, 2)
       elif src_type == 'nte' and dst_type == 'nte':
-        total_latency = nte_nte_latency()
+        total_latency = nte_nte_latency(src_region, dst_region)
         return round(total_latency, 2)  
-      elif (src_type == 'nte' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'nte'):
-        total_latency = nte_edge_latency()
+      
+      elif (src_type == 'nte' and dst_type == 'edge'):
+        total_latency = nte_edge_latency(src_region, dst_region, src_locName, dst_locName)
+        return round(total_latency, 2)  
+      elif (src_type == 'edge' and dst_type == 'nte'):
+        total_latency = nte_edge_latency(src_region, dst_region, dst_locName, src_locName)
         return round(total_latency, 2)  
       else:
         raise ValueError("Unsupported communication type", src_type, dst_type, src_region, dst_region)
@@ -1069,7 +1221,9 @@ data:
           pCloudName = pLabels['skycluster.io/provider-name']
           pContinent = pLabels['skycluster.io/provider-continent']
           pType = pLabels['skycluster.io/provider-type']
+          pLocName = pLabels['skycluster.io/provider-loc-name']
           pRegion = pLabels['skycluster.io/provider-region']
+          pRegionAlias = pLabels['skycluster.io/provider-region-alias']
           pData = provider['data']
           if pType == 'global' or pZone == 'global':
             continue
@@ -1082,10 +1236,11 @@ data:
             pDstCloudName = pDst['metadata']['labels']['skycluster.io/provider-name']
             pDstType = pDst['metadata']['labels']['skycluster.io/provider-type']
             pDstContinent = pLabels['skycluster.io/provider-continent']
+            pDstLocName = pDst['metadata']['labels']['skycluster.io/provider-loc-name']
             pDstRegion = pDst['metadata']['labels']['skycluster.io/provider-region']
+            pDstRegionAlias = pDst['metadata']['labels']['skycluster.io/provider-region-alias']
             pDstZone = pDst['metadata']['labels']['skycluster.io/provider-zone']
             transferCosts = 0
-            latency = 0
             if provider == pDst or pDstType == 'global':
               continue
             # if data transfer is between two providers of the same type, region and zone
@@ -1102,6 +1257,9 @@ data:
             else:
               transferCosts = pData['egressDataTransfer-internet']
             # TODO: We calculate latency automatically, but in the beginning we will set it manually
+            latency = get_latency(pRegionAlias, pDstRegionAlias, pType, pDstType, pLocName, pDstLocName)
+            if latency is None:
+              raise ValueError("Unsupported region", providerName, pDstName, pRegionAlias, pDstRegionAlias, pType, pDstType, pLocName, pDstLocName)
             providerAttr[providerName][pDstName] = {
               'latency': latency,
               'transferCosts': transferCosts
