@@ -1,17 +1,20 @@
 {{ if .Values.install }}
-  {{ range $key, $provider := .Values.providers.public }}
-    {{ if $provider.enabled }}
+  {{ range $provider := .Values.providers.public }}
+    {{ range $group, $spec := $provider }}
+      {{ if $spec.enabled }}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: {{ $provider.name }}
+  name: {{ $spec.name }}
 spec:
-  package: xpkg.upbound.io/upbound/{{ $provider.name }}:{{ $provider.version }}
+  package: xpkg.upbound.io/upbound/{{ $spec.name }}:{{ $spec.version }}
 ---
+      {{ end }}
     {{ end }}
   {{ end -}} # End of range .Values.providers.public
 ############################################################
   {{ range $key, $provider := .Values.providers.private }}
+    {{ if $provider.enabled }}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
@@ -19,24 +22,35 @@ metadata:
 spec:
   package: xpkg.upbound.io/crossplane-contrib/{{ $provider.name }}:{{ $provider.version }}
 ---
+    {{ end }}
   {{ end -}} # End of range .Values.providers.private
 ############################################################
+  {{ range $key, $provider := .Values.providers.local }}
+    {{ if $provider.enabled }}
+
+      {{ if eq $key "ssh" }}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-ssh
 spec:
-  package: docker.io/etesami/provider-ssh:{{ .Values.providers.local.ssh.version }}
+  package: docker.io/etesami/provider-ssh:{{ $provider.version }}
 ---
+      {{ end -}}
+
+      {{ if eq $key "kubernetes" }}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-kubernetes
 spec:
-  package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:{{ .Values.providers.local.kubernetes.version }}
+  package: xpkg.upbound.io/upbound/provider-kubernetes:{{ $provider.version }}
   runtimeConfigRef:
     apiVersion: pkg.crossplane.io/v1beta1
     kind: DeploymentRuntimeConfig
     name: provider-kubernetes
 ---
+      {{ end -}}
+    {{ end -}} # End of if $provider.enabled
+  {{ end -}} # End of range .Values.providers.local
 {{ end -}} # End of .Values.install

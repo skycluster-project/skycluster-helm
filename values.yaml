@@ -5,49 +5,60 @@ postInstall: false
 providers:
   public:
     aws:
-      name: provider-aws-ec2
-      version: v1.19.0
-      enabled: true
+      ec2:
+        name: provider-aws-ec2
+        version: v1.23.1
+        enabled: true
+      eks:
+        name: provider-aws-eks
+        version: v1.23.1
+        enabled: true
     gcp:  
-      name: provider-gcp-compute
-      version: v1.11.2
-      enabled: true
+      compute:
+        name: provider-gcp-compute
+        version: v1.14.1
+        enabled: true
+      gke:
+        name: provider-gcp-gke
+        version: v1.14.1
+        enabled: true
     azure:  
-      name: provider-azure-compute
-      version: v1.11.0
-      enabled: true
-    azure-network:
-      name: provider-azure-network
-      version: v1.11.0
-      enabled: true
+      compute:
+        name: provider-azure-compute
+        version: v1.13.1
+        enabled: true
+      network:
+        name: provider-azure-network
+        version: v1.13.1
+        enabled: true
   private:
     openstack:  
       name: provider-openstack
-      version: v0.3.0-64.g2ebefb6
+      version: v0.4.0
       enabled: true
   local:
     kubernetes:
       name: provider-kubernetes
-      version: v0.15.1
+      version: v0.18.1
       enabled: true
     ssh:
       name: provider-ssh
       version: latest
-      enabled: true
+      enabled: false
 
 functions:
   go-templating:
     name: function-go-templating
-    version: v0.9.0
+    version: v0.10.0
   extra-resources:
     name: function-extra-resources
-    version: v0.0.3
+    version: v0.1.0
   auto-ready:
     name: function-auto-ready
-    version: v0.4.0
+    version: v0.5.0
   patch-and-transform:
     name: function-patch-and-transform
-    version: v0.8.0
+    version: v0.9.0
 
 namespaces:
   skycluster:
@@ -67,10 +78,11 @@ providerMappings:
         zones:
           # We need to ensure for each region, there is one zone
           # with defaultZone set to true
-          - name: use1-az1
+          - name: us-east-1a
             locationName: Virginia
             defaultZone: true
             enabled: true
+            borderGroup: us-east-1 
             type: cloud
             defaults:
               flavor: 2vCPU-4GB
@@ -144,6 +156,9 @@ providerMappings:
             defaultZone: false
             enabled: false
             type: nte
+            # Intentionally set the border group as default availability zone
+            # to allow using internet gateway and not the carrier gateway.
+            borderGroup: us-east-1 
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 2vCPU-4GB
@@ -185,6 +200,7 @@ providerMappings:
             storage:
               - name: BlockStorage
                 type: EBS
+                volumeType: gp2
                 min: 10GB
                 step: 10GB
                 price: 0.8
@@ -195,7 +211,7 @@ providerMappings:
           - name: us-east-1-phl-1a
             locationName: Philadelphia
             defaultZone: false
-            enabled: false
+            enabled: true
             borderGroup: us-east-1-phl-1
             type: edge
             defaults:
@@ -221,7 +237,7 @@ providerMappings:
                 price: 0.09
           - name: us-east-1-iah-2a
             defaultZone: false
-            enabled: false
+            enabled: true
             borderGroup: us-east-1-iah-2
             locationName: Houston
             type: edge
@@ -251,7 +267,7 @@ providerMappings:
             defaultZone: false
             enabled: true
             borderGroup: us-east-1-dfw-2
-            type: edge
+            type: nte
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 2vCPU-4GB
@@ -273,6 +289,34 @@ providerMappings:
               - name: Internet
                 type: Internet 
                 price: 0.09
+          - name: us-east-1-nyc-1a
+            locationName: NewYork
+            defaultZone: false
+            enabled: true
+            borderGroup: us-east-1-nyc-1
+            type: nte
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              # - name: c6i.large
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
         images: 
           ubuntu-24.04: ami-0980c117fa7ebaffd
           ubuntu-22.04: ami-07543813a68cc4fe9
@@ -282,13 +326,14 @@ providerMappings:
         region: us-west-2
         regionAlias: us-west
         continent: NorthAmerica
-        enabled: false
+        enabled: true
         zones:
-          - name: usw2-az2
+          - name: us-west-2a
             locationName: California
             defaultZone: true
             enabled: true
             type: cloud
+            borderGroup: us-west-2
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 1vCPU-2GB
@@ -333,7 +378,7 @@ providerMappings:
           - name: us-west-2-wl1-las-wlz-1
             locationName: LasVegas
             defaultZone: false
-            enabled: true
+            enabled: false
             type: nte
             defaults:
               flavor: 2vCPU-4GB
@@ -359,7 +404,7 @@ providerMappings:
           - name: us-west-2-wl1-sea-wlz-1
             locationName: Seattle
             defaultZone: false
-            enabled: true
+            enabled: false
             type: nte
             storage:
               - name: BlockStorage
@@ -387,6 +432,7 @@ providerMappings:
             defaultZone: false
             enabled: true
             type: edge
+            borderGroup: us-west-2-sea-1
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 2vCPU-4GB
@@ -412,7 +458,8 @@ providerMappings:
             locationName: Portland
             defaultZone: false
             enabled: true
-            type: edge
+            type: nte
+            borderGroup: us-west-2-pdx-1
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 2vCPU-4GB
@@ -439,6 +486,61 @@ providerMappings:
             defaultZone: false
             enabled: true
             type: edge
+            borderGroup: us-west-2-lax-1
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: t3.medium
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-west-2-phx-2a
+            locationName: Phoenix
+            defaultZone: false
+            enabled: false
+            type: edge
+            borderGroup: us-west-2-phx-2
+            defaults:
+              flavor: 2vCPU-4GB
+              min-vCPU: 2vCPU-4GB
+              max-vCPU: 2vCPU-4GB
+              image: ubuntu-24.04
+            flavors:
+              - name: c6i.large
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.09
+          - name: us-west-2-las-1a
+            locationName: LasVegas
+            defaultZone: false
+            enabled: true
+            type: edge
+            borderGroup: us-west-2-las-1
             defaults:
               flavor: 2vCPU-4GB
               min-vCPU: 2vCPU-4GB
@@ -461,7 +563,7 @@ providerMappings:
                 type: Internet 
                 price: 0.09
         images: 
-          ubuntu-24.04: ami-0980c117fa7ebaffd
+          ubuntu-24.04: ami-00c257e12d6828491
           ubuntu-22.04: ami-0075013580f6322a1
           ubuntu-20.04: ami-00c12baa984f651c4
           # ubuntu-18.04: ami-0075ef908dba2df0a     
@@ -518,7 +620,7 @@ providerMappings:
                 type: Internet 
                 price: 0.09
         images: 
-          ubuntu-24.04: ami-0980c117fa7ebaffd
+          ubuntu-24.04: ami-00a438ab498e97e4a
           ubuntu-22.04: ami-07543813a68cc4fe9
           ubuntu-20.04: ami-0f81732f07ce19b1c
           # ubuntu-18.04: ami-03025bb25a1de0fc2
@@ -585,6 +687,11 @@ providerMappings:
                 vcpus: 8
                 ram: 32GB
                 price: 0.2680
+            pubSub:
+              - name: free-tier # 10GB per month
+                price: 0
+              - name: premium 
+                price: 40 # $40 per TiB
             egressDataTransfer:
               - name: Internet
                 type: Internet 
@@ -594,7 +701,7 @@ providerMappings:
         region: us-west1
         continent: NorthAmerica
         regionAlias: us-west
-        enabled: false
+        enabled: true
         zones:
           - name: b
             locationName: Oregon
@@ -649,7 +756,7 @@ providerMappings:
         continent: Africa
         locationName: Johannesburg
         region: southafricanorth
-        regionAlias: southafrica-north
+        regionAlias: af-north
         enabled: false
         zones:
           # The default zone is not applicable in Azure
@@ -721,7 +828,7 @@ providerMappings:
         continent: NorthAmerica
         locationName: Illinois
         region: northcentralus
-        regionAlias: us-northcentral
+        regionAlias: us-north-central
         enabled: true
         zones:
           - name: default
@@ -781,12 +888,204 @@ providerMappings:
               - name: Internet
                 type: Internet 
                 price: 0.087
+      - name: westus
+        locationName: California
+        continent: NorthAmerica
+        region: westus
+        regionAlias: us-west
+        enabled: true
+        zones:
+          - name: default
+            locationName: California
+            defaultZone: false
+            enabled: true
+            type: cloud
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: server
+                version: latest
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2s
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2ms
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4ms
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8ms
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+      - name: westus2
+        locationName: Washington
+        continent: NorthAmerica
+        region: westus2
+        regionAlias: us-west
+        enabled: true
+        zones:
+          - name: default
+            locationName: Washington
+            defaultZone: false
+            enabled: true
+            type: edge
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: server
+                version: latest
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2s
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2ms
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4ms
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8ms
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
+      - name: westus3
+        locationName: Phoenix
+        continent: NorthAmerica
+        region: westus3
+        regionAlias: us-west
+        enabled: true
+        zones:
+          - name: default
+            locationName: Phoenix
+            defaultZone: false
+            enabled: true
+            type: cloud
+            storage:
+              - name: BlockStorage
+                type: EBS
+                min: 10GB
+                step: 10GB
+                price: 0.8
+            images: 
+              ubuntu-22.04: 
+                publisher: Canonical
+                offer: 0001-com-ubuntu-server-jammy
+                sku: 22_04-lts-gen2
+                version: latest
+              ubuntu-24.04: 
+                publisher: Canonical
+                offer: ubuntu-24_04-lts
+                sku: server
+                version: latest
+            defaults:
+              flavor: 2vCPU-1GB
+              image: ubuntu-24.04
+              min-vCPU: 2vCPU-1GB
+              max-vCPU: 8vCPU-32GB
+            flavors: 
+              - name: Standard_B2ts_v2
+                flavor: 2vCPU-1GB
+                vcpus: 2
+                ram: 1GB
+                price: 0.0104
+              - name: Standard_B2s
+                flavor: 2vCPU-4GB
+                vcpus: 2
+                ram: 4GB
+                price: 0.0416
+              - name: Standard_B2ms
+                flavor: 2vCPU-8GB
+                vcpus: 2
+                ram: 8GB
+                price: 0.0832
+              - name: Standard_B4ms
+                flavor: 4vCPU-16GB
+                vcpus: 4
+                ram: 16GB
+                price: 0.1664
+              - name: Standard_B8ms
+                flavor: 8vCPU-32GB
+                vcpus: 8
+                ram: 32GB
+                price: 0.3328
+            egressDataTransfer:
+              - name: Internet
+                type: Internet 
+                price: 0.087
       - name: southcentralus
         locationName: Texas
         continent: NorthAmerica
         region: southcentralus
-        regionAlias: us-southcentral
-        enabled: false
+        regionAlias: us-south-central
+        enabled: true
         zones:
           - name: default
             locationName: Texas
@@ -849,7 +1148,7 @@ providerMappings:
         locationName: Toronto
         region: canadaeast
         continent: NorthAmerica
-        regionAlias: ca-east
+        regionAlias: ca-central
         enabled: false
         zones:
           - name: default
@@ -917,7 +1216,7 @@ providerMappings:
       - name: canadacentral
         locationName: Montreal
         region: canadacentral
-        regionAlias: ca-central
+        regionAlias: ca-east
         continent: NorthAmerica
         enabled: false
         zones:
@@ -993,7 +1292,7 @@ providerMappings:
         continent: NorthAmerica
         regionAlias: us-central
         region: centralus
-        enabled: false
+        enabled: true
         zones:
           - name: default
             locationName: Iowa
@@ -1062,3 +1361,65 @@ providerMappings:
                 vcpus: 8
                 ram: 32GB
                 price: 0.3328
+
+
+providerLatencies:
+  custom:
+    - source: virginia
+      destinations:
+        - philadelphia: 5
+        - boston: 14.5
+        - newyork: 5
+        - houston: 31
+        - dallas: 31.5
+    - source: california
+      destinations:
+        - portland: 6.5
+        - seattle: 7
+        - losangeles: 24
+        - lasvegas: 20
+        - phoenix: 38
+
+    - source: boston
+      destinations:
+        - toronto: 23
+        - philadelphia: 10
+        - newyork: 8
+        - houston: 44
+        - dallas: 42
+    - source: newyork
+      destinations:
+        - toronto: 16
+        - philadelphia: 3
+        - houston: 44
+        - dallas: 33
+    - source: philadelphia
+      destinations:
+        - toronto: 17.8
+        - houston: 33
+        - dallas: 35
+    - source: houston
+      destinations:
+        - dallas: 9
+        - losangeles: 43
+      
+    - source: seattle
+      destinations:
+        - portland: 5
+        - losangeles: 26.6
+        - lasvegas: 26.7
+        - phoenix: 37.6
+        - washington: 5
+    - source: portland
+      destinations:
+        - losangeles: 23
+        - lasvegas: 25
+        - phoenix: 33
+        - washington: 9
+    - source: losangeles
+      destinations:
+        - lasvegas: 16
+        - phoenix: 13
+    - source: lasvegas
+      destinations:
+        - phoenix: 25.2
