@@ -6,6 +6,8 @@ apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: {{ $spec.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
 spec:
   package: xpkg.upbound.io/upbound/{{ $spec.name }}:{{ $spec.version }}
 ---
@@ -19,6 +21,8 @@ apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: {{ $provider.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
 spec:
   package: xpkg.upbound.io/crossplane-contrib/{{ $provider.name }}:{{ $provider.version }}
 ---
@@ -33,6 +37,8 @@ apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-ssh
+  labels:
+    skycluster.io/managed-by: skycluster
 spec:
   package: docker.io/etesami/provider-ssh:{{ $provider.version }}
 ---
@@ -43,12 +49,29 @@ apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-kubernetes
+  labels:
+    skycluster.io/managed-by: skycluster
 spec:
   package: xpkg.upbound.io/upbound/provider-kubernetes:{{ $provider.version }}
   runtimeConfigRef:
     apiVersion: pkg.crossplane.io/v1beta1
     kind: DeploymentRuntimeConfig
     name: provider-kubernetes
+---
+      {{ end -}}
+      {{ if eq $key "helm" }}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-helm
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  package: xpkg.upbound.io/upbound/provider-helm:{{ $provider.version }}
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: provider-helm
 ---
       {{ end -}}
     {{ end -}} # End of if $provider.enabled

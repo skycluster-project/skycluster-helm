@@ -1,7 +1,7 @@
 
 {{- if .Values.providers.private.openstack.enabled }}
 {{- if .Values.generateConfigMaps }}
-providerMappings:
+mappings:
   openstack:
     regions:
 {{- range .Values.savi.locations }}

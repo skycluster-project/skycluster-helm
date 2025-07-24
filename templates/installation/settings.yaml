@@ -1,27 +1,30 @@
 {{ if .Values.install }}
-# skycluster namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Values.namespaces.skycluster.name }}
----
-# Extra configuration needed for provider-kubernetes
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: skycluster-sva
-  namespace: {{ .Values.namespaces.crossplane.name }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: skycluster-sva
-  namespace: {{ .Values.namespaces.skycluster.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    skycluster.io/managed-by: skycluster
 ---
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
   name: provider-kubernetes
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: skycluster-sva
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-helm
+  labels:
+    skycluster.io/managed-by: skycluster
 spec:
   serviceAccountTemplate:
     metadata:
@@ -30,14 +33,13 @@ spec:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: provider-kubernetes-cluster-admin
+  name: provider-local-cluster-admin
+  labels:
+    skycluster.io/managed-by: skycluster
 subjects:
   - kind: ServiceAccount
     name: skycluster-sva
-    namespace: {{ .Values.namespaces.crossplane.name }}
-  - kind: ServiceAccount
-    name: skycluster-sva
-    namespace: {{ .Values.namespaces.skycluster.name }}
+    namespace: {{ .Release.Namespace }}
   - kind: ServiceAccount
     name: skycluster-sva
     namespace: default
@@ -45,5 +47,30 @@ roleRef:
   kind: ClusterRole
   name: cluster-admin
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: skycluster-pv
+  namespace: {{ .Release.Namespace }}
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: skycluster-pvc
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 {{ end }}

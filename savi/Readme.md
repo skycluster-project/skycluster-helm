@@ -3,7 +3,7 @@
 1. First using `values.yaml` generate the settings for OS Providers:
 
 ```bash
-# This generates the providerMappings object located in the parent folder
+# This generates the mappings object located in the parent folder
 helm template . --set generateConfigMaps=1 > ../values/settings-savi-many-zones.yaml
 
 # Once the settings-savi-many-zones.yaml is created, go to the parent helm folder and

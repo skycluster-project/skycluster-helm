@@ -1,4 +1,4 @@
-providerMappings:
+mappings:
   openstack:
     regions:
       - name: scinet

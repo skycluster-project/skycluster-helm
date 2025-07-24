@@ -1,6 +1,6 @@
 ---
 # Source: skycluster-savi/templates/settings-templates.yaml
-providerMappings:
+mappings:
   openstack:
     regions:
       - name: scinet
@@ -16,7 +16,7 @@ providerMappings:
           - name: zone-1
             locationName: scinet_cloud_1
             defaultZone:  true 
-            enabled:  true 
+            enabled: true 
             type: cloud
             labels:
               provider-category: us-east1   
@@ -35,6 +35,11 @@ providerMappings:
                 min: 10GB
                 step: 10GB
                 price: 0.8
+            pubSub:
+              - name: free-tier # 10GB per month
+                price: 0
+              - name: premium-tier
+                price: 40 # $40 per TiB
             flavors:
               - name: m1.small
                 flavor: 1vCPU-2GB
@@ -104,7 +109,7 @@ providerMappings:
           - name: zone-2
             locationName: scinet_cloud_2
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-east2   
@@ -192,7 +197,7 @@ providerMappings:
           - name: zone-3
             locationName: scinet_cloud_3
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-east3   
@@ -280,7 +285,7 @@ providerMappings:
           - name: zone-4
             locationName: scinet_cloud_4
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-east4   
@@ -368,7 +373,7 @@ providerMappings:
           - name: zone-5
             locationName: scinet_cloud_5
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-east5   
@@ -456,7 +461,7 @@ providerMappings:
           - name: zone-6
             locationName: scinet_cloud_6
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-west1   
@@ -544,7 +549,7 @@ providerMappings:
           - name: zone-7
             locationName: scinet_cloud_7
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-west2   
@@ -632,7 +637,7 @@ providerMappings:
           - name: zone-8
             locationName: scinet_cloud_8
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-west3   
@@ -720,7 +725,7 @@ providerMappings:
           - name: zone-9
             locationName: scinet_cloud_9
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-west4   
@@ -808,7 +813,7 @@ providerMappings:
           - name: zone-10
             locationName: scinet_cloud_10
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: cloud
             labels:
               provider-category: us-west5   
@@ -896,7 +901,7 @@ providerMappings:
           - name: zone-11
             locationName: scinet_edge_11
             defaultZone:  false 
-            enabled:  true 
+            enabled: false 
             type: edge
             labels:
               provider-category: us-east1   
@@ -984,7 +989,7 @@ providerMappings:
           - name: zone-12
             locationName: scinet_edge_12
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-east2   
@@ -1072,7 +1077,7 @@ providerMappings:
           - name: zone-13
             locationName: scinet_edge_13
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-east3   
@@ -1160,7 +1165,7 @@ providerMappings:
           - name: zone-14
             locationName: scinet_edge_14
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-east4   
@@ -1248,7 +1253,7 @@ providerMappings:
           - name: zone-15
             locationName: scinet_edge_15
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-east5   
@@ -1336,7 +1341,7 @@ providerMappings:
           - name: zone-16
             locationName: scinet_edge_16
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-west1   
@@ -1424,7 +1429,7 @@ providerMappings:
           - name: zone-17
             locationName: scinet_edge_17
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-west2   
@@ -1512,7 +1517,7 @@ providerMappings:
           - name: zone-18
             locationName: scinet_edge_18
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-west3   
@@ -1600,7 +1605,7 @@ providerMappings:
           - name: zone-19
             locationName: scinet_edge_19
             defaultZone:  false 
-            enabled:  true 
+            enabled: false
             type: edge
             labels:
               provider-category: us-west4   
@@ -1686,9 +1691,9 @@ providerMappings:
                 ram: 32GB
                 price: 0.48
           - name: zone-20
-            locationName: scinet_edge_20
+            locationName: Toronto
             defaultZone:  false 
-            enabled:  true 
+            enabled: true
             type: edge
             labels:
               provider-category: us-west5   
@@ -1792,7 +1797,7 @@ providerMappings:
             locationName: vaughan_cloud_1
             defaultZone:  true 
             type: cloud   
-            enabled:  true 
+            enabled: false 
             defaults:
               flavor: m1.large16
               image: ubuntu-22.04

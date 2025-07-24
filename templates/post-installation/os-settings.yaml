@@ -1,6 +1,6 @@
 {{ if .Values.postInstall }}
 ---
-{{ range $key, $data := .Values.providerMappings.openstack.regions }}
+{{ range $key, $data := .Values.mappings.openstack.regions }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
