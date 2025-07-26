@@ -1,4 +1,10 @@
 {{ if .Values.install }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: submariner-operator
+  labels:
+    skycluster.io/managed-by: skycluster
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -43,6 +49,9 @@ subjects:
   - kind: ServiceAccount
     name: skycluster-sva
     namespace: default
+  - kind: ServiceAccount
+    name: skycluster-sva
+    namespace: crossplane-system
 roleRef:
   kind: ClusterRole
   name: cluster-admin
