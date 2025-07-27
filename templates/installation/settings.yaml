@@ -7,10 +7,17 @@ metadata:
     skycluster.io/managed-by: skycluster
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: skycluster-sva
-  namespace: {{ .Release.Namespace }}
+  namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
 ---
@@ -45,13 +52,13 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: skycluster-sva
-    namespace: {{ .Release.Namespace }}
-  - kind: ServiceAccount
-    name: skycluster-sva
     namespace: default
   - kind: ServiceAccount
     name: skycluster-sva
     namespace: crossplane-system
+  - kind: ServiceAccount
+    name: skycluster-sva
+    namespace: skycluster-system
 roleRef:
   kind: ClusterRole
   name: cluster-admin
@@ -61,7 +68,7 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: skycluster-pv
-  namespace: {{ .Release.Namespace }}
+  namespace: skycluster-system
 spec:
   capacity:
     storage: 1Gi
@@ -74,7 +81,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: skycluster-pvc
-  namespace: {{ .Release.Namespace }}
+  namespace: skycluster-system
 spec:
   accessModes:
     - ReadWriteOnce

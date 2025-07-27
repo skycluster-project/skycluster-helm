@@ -20,11 +20,11 @@ providers:
       cloudwatchevents: 
         name: provider-aws-cloudwatchevents
         version: v1
-        enabled: true
+        enabled: false
       sqs:
         name: provider-aws-sqs
         version: v1
-        enabled: true
+        enabled: false
     gcp:  
       compute:
         name: provider-gcp-compute
