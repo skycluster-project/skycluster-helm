@@ -1,0 +1,37 @@
+{{ if .Values.install }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skycluster-dashboard
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: skycluster-dashboard
+  template:
+    metadata:
+      labels:
+        app: skycluster-dashboard
+    spec:
+      serviceAccountName: skycluster-sva
+      containers:
+      - name: skycluster-dashboard
+        image: etesami/skycluster-dashboard:latest
+        ports:
+        - containerPort: 8090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skycluster-dashboard
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: skycluster-dashboard
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8090
+  type: LoadBalancer
+{{ end }}

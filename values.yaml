@@ -13,7 +13,16 @@ providers:
         name: provider-aws-eks
         version: v1.23.1
         enabled: true
+      iam: 
         name: provider-aws-iam
+        version: v1
+        enabled: true
+      cloudwatchevents: 
+        name: provider-aws-cloudwatchevents
+        version: v1
+        enabled: true
+      sqs:
+        name: provider-aws-sqs
         version: v1
         enabled: true
     gcp:  
