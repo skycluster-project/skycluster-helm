@@ -89,4 +89,43 @@ spec:
     requests:
       storage: 1Gi
 ---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: skycluster-ca-gen
+  namespace: skycluster-system
+spec:
+  restartPolicy: Never
+  serviceAccountName: skycluster-sva
+  containers:
+    - name: skycluster-ca-gen
+      image: etesami/ca-gen:6c954e2
+      env:
+        - name: POD_NAMESPACE
+          value: "skycluster-system"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: headscale-pvc
+  namespace: skycluster-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: headscale-config-pvc
+  namespace: skycluster-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 {{ end }}
