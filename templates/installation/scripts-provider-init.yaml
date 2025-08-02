@@ -48,11 +48,13 @@ data:
         permissions: '0755'
         content: |
           __CA_CERTIFICATE__
+    runcmd:
+      - update-ca-certificates --fresh
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: screipt-pre-install
+  name: script-pre-install
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
@@ -74,12 +76,6 @@ data:
           iptables -tnat -A POSTROUTING -j sky-postrouting
           iptables -tnat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
           iptables -tnat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
-          # Updating certificates
-          echo "Updating certificates" >> /root/pre-install.log
-          update-ca-certificates
-          # # Replace IP address in the bird configuration file
-          # echo "Replacing IP address in the bird configuration file" >> /root/pre-install.log
-          # sed -i "s/__IP_ADDRESS__/$IP_ADDR/g" /etc/bird/bird.conf
           # Enable IP forwarding
           echo "Enabling IP forwarding" >> /root/pre-install.log
           sudo sed -i '/^#net.ipv4.ip_forward=1/s/^#//g' /etc/sysctl.conf
@@ -333,7 +329,18 @@ data:
           done
           echo "Installation Completed" >> /root/bird2-install.log
           # Create the bird2 configuration file
+      - path: /usr/local/bin/bird-config.sh
+        owner: root:root
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+          # Replace IP address in the bird configuration file
+          echo "Replacing IP address in the bird configuration file" >> /root/pre-install.log
+          INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
+          IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
+          sed -i "s/__IP_ADDRESS__/$IP_ADDR/g" /etc/bird/bird.conf
     runcmd:
+      - /usr/local/bin/bird-config.sh
       - /usr/local/bin/setup-bgp.sh
 ---
 apiVersion: v1
