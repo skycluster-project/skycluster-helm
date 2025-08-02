@@ -2,11 +2,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: script-networkd-dispatcher-tailscale
+  name: script-networkd-dispatcher
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
     skycluster.io/script-init: networkd-dispatcher
 data:
   cloud-init: |
@@ -18,14 +19,14 @@ data:
         content: |
           #!/bin/sh
           INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
-          echo "Enabling Segmentation Offload" >> /root/pre-install.log
+          echo "Enabling Segmentation Offload" >> /root/50-tailscale.log
           # check out
           # https://tailscale.com/kb/1320/performance-best-practices#linux-optimizations-for-subnet-routers-and-exit-nodes
           if systemctl is-enabled networkd-dispatcher &>/dev/null; then
-            echo "networkd-dispatcher is enabled." >> /root/pre-install.log
+            echo "networkd-dispatcher is enabled." >> /root/50-tailscale.log
             ethtool -K $INTF_NAME rx-udp-gro-forwarding on rx-gro-list off
           else
-            echo "networkd-dispatcher is not enabled. Skipping." >> /root/pre-install.log
+            echo "networkd-dispatcher is not enabled. Skipping." >> /root/50-tailscale.log
           fi
     runcmd:
       - /etc/networkd-dispatcher/routable.d/50-tailscale
@@ -37,7 +38,8 @@ metadata:
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
     skycluster.io/script-init: ca-certificate
 data:
   cloud-init: |
@@ -54,102 +56,41 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: script-pre-install
+  name: script-iptables-postrouting
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
-    skycluster.io/script-init: pre-install
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
+    skycluster.io/script-init: iptables-postrouting
 data:
   cloud-init: |
     #cloud-config
     write_files:
-      - path: /usr/local/bin/pre-install.sh
+      - path: /usr/local/bin/iptables-postrouting.sh
         owner: root:root
         permissions: '0755'
         content: |
           #!/bin/bash
-          echo "Setting iptables rules" >> /root/pre-install.log
+          echo "Setting iptables rules" >> /root/iptables-postrouting.log
           INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
           IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
           iptables -tnat -N sky-postrouting
           iptables -tnat -A POSTROUTING -j sky-postrouting
           iptables -tnat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
           iptables -tnat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
-          # Enable IP forwarding
-          echo "Enabling IP forwarding" >> /root/pre-install.log
-          sudo sed -i '/^#net.ipv4.ip_forward=1/s/^#//g' /etc/sysctl.conf
-          sudo sed -i '/^#net.ipv6.conf.all.forwarding=1/s/^#//g' /etc/sysctl.conf
-          sysctl -p
     runcmd:
-      - /usr/local/bin/pre-install.sh
+      - /usr/local/bin/iptables-postrouting.sh
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: script-node-exporter-systemd
+  name: script-tailscale
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
-    skycluster.io/script-init: node-exporter
-data:
-  cloud-init: |
-    #cloud-config
-    write_files:
-      - path: /etc/systemd/system/node_exporter.service
-        owner: root:root
-        permissions: '0644'
-        content: |
-          [Unit]
-          Description=Node Exporter
-          After=network.target
-
-          [Service]
-          ExecStart=/usr/local/bin/node_exporter
-
-          [Install]
-          WantedBy=multi-user.target
-      - path: /usr/local/bin/install-node-exporter.sh
-        owner: root:root
-        permissions: '0755'
-        content: |
-          #!/bin/bash
-          echo "I've been run" >> /root/node-exporter-install.log
-          install_node_exporter() {
-            wget -q -P /root https://github.com/prometheus/node_exporter/releases/download/v1.9.1/node_exporter-1.9.1.linux-amd64.tar.gz
-            if [ $? -eq 0 ]; then
-              echo "Download succeeded" >> /root/node-exporter-install.log
-              tar -zxvf /root/node_exporter-1.9.1.linux-amd64.tar.gz -C /root
-              mv /root/node_exporter-1.9.1.linux-amd64/node_exporter /usr/local/bin/
-              rm /root/node_exporter-1.9.1.linux-amd64.tar.gz
-              rm -rf /root/node_exporter-1.9.1.linux-amd64
-              return $?
-            else
-              echo "Download failed" >> /root/node-exporter-install.log
-              return 1
-            fi
-          }
-          # Loop until the installation succeeds
-          until install_node_exporter; do
-            echo "Installation failed, retrying..." >> /root/node-exporter-install.log
-            sleep 5 # Wait for 5 seconds before retrying
-          done
-          echo "Installation Completed" >> /root/node-exporter-install.log
-          systemctl daemon-reload
-          systemctl enable --now node_exporter
-          echo "Service activated" >> /root/node-exporter-install.log
-    runcmd:
-      - /usr/local/bin/install-node-exporter.sh
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: script-install-tailscale
-  namespace: skycluster-system
-  labels:
-    skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
     skycluster.io/script-init: tailscale
 data:
   cloud-init: |
@@ -257,7 +198,8 @@ metadata:
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
     skycluster.io/script-init: bird-config
 data:
   cloud-init: |
@@ -350,7 +292,8 @@ metadata:
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: provider-init
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
     skycluster.io/script-init: k3s-controller
 data:
   cloud-init: |
