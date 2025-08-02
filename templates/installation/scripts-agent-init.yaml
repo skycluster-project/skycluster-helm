@@ -2,11 +2,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init-routing-masquerade
+  name: script-agent-routing-masquerade
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: agent-routing-init-masquerade
+    skycluster.io/script-type: agent-init
+    skycluster.io/script-init: routing-masquerade
 data:
   cloud-init: |
     #cloud-config
@@ -28,11 +29,12 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init-routing
+  name: script-agent-routing
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: agent-routing-init
+    skycluster.io/script-type: agent-init
+    skycluster.io/script-init: routing-init
 data:
   cloud-init: |
     #cloud-config
@@ -52,11 +54,12 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init-ip-forwarding
+  name: script-agent-ip-forwarding
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: agent-ip-forwarding-init
+    skycluster.io/script-type: agent-init
+    skycluster.io/script-init: ip-forwarding
 data:
   cloud-init: |
     #cloud-config
@@ -75,11 +78,12 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init-etc-hosts
+  name: script-agent-etc-hosts
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: etc-hosts-config
+    skycluster.io/script-type: agent-init
+    skycluster.io/script-init: etc-hosts
 data:
   cloud-init: |
     #cloud-config
@@ -98,11 +102,12 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init-node-exported
+  name: script-agent-node-exporter
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: node-exporter
+    skycluster.io/script-type: agent-init
+    skycluster.io/script-init: node-exporter
 data:
   cloud-init: |
     #cloud-config

@@ -2,11 +2,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scripts-cloud-init
+  name: script-networkd-dispatcher-tailscale
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
     skycluster.io/script-type: provider-init
+    skycluster.io/script-init: networkd-dispatcher
 data:
   cloud-init: |
     #cloud-config
@@ -26,11 +27,41 @@ data:
           else
             echo "networkd-dispatcher is not enabled. Skipping." >> /root/pre-install.log
           fi
+    runcmd:
+      - /etc/networkd-dispatcher/routable.d/50-tailscale
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-ca-certificate
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: ca-certificate
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
       - path: /usr/local/share/ca-certificates/ca-certificate.crt
         owner: root:root
         permissions: '0755'
         content: |
           __CA_CERTIFICATE__
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: screipt-pre-install
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: pre-install
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
       - path: /usr/local/bin/pre-install.sh
         owner: root:root
         permissions: '0755'
@@ -46,14 +77,30 @@ data:
           # Updating certificates
           echo "Updating certificates" >> /root/pre-install.log
           update-ca-certificates
-          # Replace IP address in the bird configuration file
-          echo "Replacing IP address in the bird configuration file" >> /root/pre-install.log
-          sed -i "s/__IP_ADDRESS__/$IP_ADDR/g" /etc/bird/bird.conf
+          # # Replace IP address in the bird configuration file
+          # echo "Replacing IP address in the bird configuration file" >> /root/pre-install.log
+          # sed -i "s/__IP_ADDRESS__/$IP_ADDR/g" /etc/bird/bird.conf
           # Enable IP forwarding
           echo "Enabling IP forwarding" >> /root/pre-install.log
           sudo sed -i '/^#net.ipv4.ip_forward=1/s/^#//g' /etc/sysctl.conf
           sudo sed -i '/^#net.ipv6.conf.all.forwarding=1/s/^#//g' /etc/sysctl.conf
           sysctl -p
+    runcmd:
+      - /usr/local/bin/pre-install.sh
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-node-exporter-systemd
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: node-exporter
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
       - path: /etc/systemd/system/node_exporter.service
         owner: root:root
         permissions: '0644'
@@ -96,6 +143,22 @@ data:
           systemctl daemon-reload
           systemctl enable --now node_exporter
           echo "Service activated" >> /root/node-exporter-install.log
+    runcmd:
+      - /usr/local/bin/install-node-exporter.sh
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-install-tailscale
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: tailscale
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
       - path: /usr/local/bin/install-tailscale.sh
         owner: root:root
         permissions: '0755'
@@ -182,6 +245,28 @@ data:
           for ii in `sudo tailscale status | awk '{print $2}' | tail -n +2`; do 
             IP=`sudo tailscale ip --4 $ii` && ping_ip $IP >> /root/ping-check.log; 
           done
+    runcmd:
+      - /usr/local/bin/install-tailscale.sh
+      - /usr/local/bin/setup-tailscale.sh
+      - |
+        crontab -u root -l 2>/dev/null > /tmp/mycron || true
+        echo "*/5 * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
+        echo "* * * * * sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
+        crontab -u root /tmp/mycron
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-bird-config
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: bird-config
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
       - path: /etc/bird/bird.conf
         owner: root:root
         permissions: '644'
@@ -249,25 +334,7 @@ data:
           echo "Installation Completed" >> /root/bird2-install.log
           # Create the bird2 configuration file
     runcmd:
-      - /usr/local/bin/pre-install.sh
-      # - /usr/local/bin/install-tailscale.sh
-      # - /usr/local/bin/setup-tailscale.sh
-      # - |
-      #   crontab -u root -l 2>/dev/null > /tmp/mycron || true
-      #   echo "* * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 15 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 30 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 45 && sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
-      #   echo "* * * * * sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 10 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 20 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 30 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 40 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   echo "* * * * * sleep 50 && sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-      #   crontab -u root /tmp/mycron
-      # - /usr/local/bin/setup-bgp.sh
-      # - /etc/networkd-dispatcher/routable.d/50-tailscale
-      # - /usr/local/bin/install-node-exporter.sh
+      - /usr/local/bin/setup-bgp.sh
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -276,7 +343,8 @@ metadata:
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
-    skycluster.io/script-type: k3s-controller
+    skycluster.io/script-type: provider-init
+    skycluster.io/script-init: k3s-controller
 data:
   cloud-init: |
     #cloud-config
