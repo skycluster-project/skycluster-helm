@@ -133,7 +133,7 @@ data:
               sleep 5
           done
           echo "tailscale is available" >> /root/tailscale-setup.log
-          LOGIN_URL=__OVERLAY_HOSTURL__:__OVERLAY_PORT__
+          LOGIN_URL=__OVERLAY_LOGIN_URL__
           AUTH_KEY=__OVERLAY_TOKEN__
           HOSTNAME=__OVERLAY_HOSTNAME__
           echo "Running tailscale" >> /root/tailscale-setup.log
