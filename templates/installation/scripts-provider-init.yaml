@@ -45,13 +45,31 @@ data:
   cloud-init: |
     #cloud-config
     write_files:
-      - path: /usr/local/share/ca-certificates/ca-certificate.crt
+      - path: /usr/local/bin/generate-ca-cert.sh
         owner: root:root
         permissions: '0755'
         content: |
-          __CA_CERTIFICATE__
+          #!/bin/bash
+          echo "Generating CA certificate" >> /root/generate-ca-cert.log
+          ENCODED_CA=__CA_CERTIFICATE_ENCODED__
+          if [ -z "$ENCODED_CA" ]; then
+            echo "CA certificate is not set. Exiting." >> /root/generate-ca-cert.log
+            exit 1
+          fi
+          echo "$ENCODED_CA" | base64 -d > /usr/local/share/ca-certificates/ca-certificate.crt
+          if [ $? -ne 0 ]; then
+            echo "Failed to decode CA certificate." >> /root/generate-ca-cert.log
+            exit 1
+          fi
+          echo "CA certificate generated successfully." >> /root/generate-ca-cert.log
+          # Update the CA certificates
+          if ! update-ca-certificates --fresh; then
+            echo "Failed to update CA certificates." >> /root/generate-ca-cert.log
+            exit 1
+          fi
+          echo "CA certificates updated successfully." >> /root/generate-ca-cert.log
     runcmd:
-      - update-ca-certificates --fresh
+      - /usr/local/bin/generate-ca-cert.sh
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -141,14 +159,12 @@ data:
           echo "--auth-key $AUTH_KEY" >> /root/tailscale-setup.log
           echo "--hostname $HOSTNAME" >> /root/tailscale-setup.log
           
-          # There is a bug that prevents node registration with advertise-routes in the first run
-          # See https://github.com/juanfont/headscale/issues/2485
-          # We handle this by running a script in the server side for now.
           while true; do
             if tailscale up --login-server $LOGIN_URL --auth-key $AUTH_KEY --hostname $HOSTNAME --advertise-routes __SUBNETCIDR__ --accept-routes; then
               echo "Tailscale connected successfully" >> /root/tailscale-setup.log
               break
             else
+              service tailscaled restart
               echo "Tailscale connection failed, retrying in 10 seconds..." >> /root/tailscale-setup.log
               sleep 5
             fi
