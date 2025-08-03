@@ -19,6 +19,7 @@ data:
           #!/bin/bash
           echo "Enable IP Forwarding" >> /root/ip-forwarding.log
           sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+          sed -i 's/#net.ipv6.conf.all.forwarding=1/net.ipv6.conf.all.forwarding=1/' /etc/sysctl.conf
           sysctl -p
     runcmd:
       - /usr/local/bin/enable-ip-forwarding.sh
