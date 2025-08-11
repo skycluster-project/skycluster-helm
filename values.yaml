@@ -34,6 +34,14 @@ providers:
         name: provider-gcp-gke
         version: v1.14.1
         enabled: true
+      container:
+        name: provider-gcp-container
+        version: v1.14.1
+        enabled: true
+      cloudplatform:
+        name: provider-gcp-cloudplatform
+        version: v1.14.1
+        enabled: true
     azure:  
       compute:
         name: provider-azure-compute
