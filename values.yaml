@@ -51,12 +51,12 @@ providers:
         name: provider-azure-network
         version: v1.13.1
         enabled: true
-  private:
+  community:
     openstack:  
       name: provider-openstack
-      version: v0.4.0
+      version: v0.7.2
       enabled: true
-  local:
+      repo: docker.io/etesami/provider-openstack
     helm:
       name: provider-helm
       version: v0
@@ -65,10 +65,12 @@ providers:
       name: provider-kubernetes
       version: v0
       enabled: true
+      repo: xpkg.upbound.io/upbound/provider-kubernetes
     ssh:
       name: provider-ssh
       version: latest
-      enabled: false
+      enabled: true
+      repo: docker.io/etesami/provider-ssh
 
 functions:
   go-templating:

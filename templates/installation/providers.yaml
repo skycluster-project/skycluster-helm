@@ -15,8 +15,9 @@ spec:
     {{ end }}
   {{ end -}} # End of range .Values.providers.public
 ############################################################
-  {{ range $key, $provider := .Values.providers.private }}
-    {{ if $provider.enabled }}
+  {{- range $key, $provider := .Values.providers.community }}
+    {{- if $provider.enabled }}
+      {{- if or (eq $key "kubernetes") (eq $key "helm") }}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
@@ -24,56 +25,29 @@ metadata:
   labels:
     skycluster.io/managed-by: skycluster
 spec:
+  package: xpkg.upbound.io/upbound/{{ $provider.name }}:{{ $provider.version }}
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: {{ $provider.name }}
+---
+      {{- else }}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: {{ $provider.name }}
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  {{ if $provider.repo -}}
+  package: {{ $provider.repo }}:{{ $provider.version }}
+  {{ else -}}
   package: xpkg.upbound.io/crossplane-contrib/{{ $provider.name }}:{{ $provider.version }}
+  {{ end -}}
+      {{ end -}}
+    {{- end }}
 ---
-    {{ end }}
-  {{ end -}} # End of range .Values.providers.private
+  {{ end -}} # End of range .Values.providers.community
 ############################################################
-  {{ range $key, $provider := .Values.providers.local }}
-    {{ if $provider.enabled }}
 
-      {{ if eq $key "ssh" }}
-apiVersion: pkg.crossplane.io/v1
-kind: Provider
-metadata:
-  name: provider-ssh
-  labels:
-    skycluster.io/managed-by: skycluster
-spec:
-  package: docker.io/etesami/provider-ssh:{{ $provider.version }}
----
-      {{ end -}}
-
-      {{ if eq $key "kubernetes" }}
-apiVersion: pkg.crossplane.io/v1
-kind: Provider
-metadata:
-  name: provider-kubernetes
-  labels:
-    skycluster.io/managed-by: skycluster
-spec:
-  package: xpkg.upbound.io/upbound/provider-kubernetes:{{ $provider.version }}
-  runtimeConfigRef:
-    apiVersion: pkg.crossplane.io/v1beta1
-    kind: DeploymentRuntimeConfig
-    name: provider-kubernetes
----
-      {{ end -}}
-      {{ if eq $key "helm" }}
-apiVersion: pkg.crossplane.io/v1
-kind: Provider
-metadata:
-  name: provider-helm
-  labels:
-    skycluster.io/managed-by: skycluster
-spec:
-  package: xpkg.upbound.io/upbound/provider-helm:{{ $provider.version }}
-  runtimeConfigRef:
-    apiVersion: pkg.crossplane.io/v1beta1
-    kind: DeploymentRuntimeConfig
-    name: provider-helm
----
-      {{ end -}}
-    {{ end -}} # End of if $provider.enabled
-  {{ end -}} # End of range .Values.providers.local
 {{ end -}} # End of .Values.install
