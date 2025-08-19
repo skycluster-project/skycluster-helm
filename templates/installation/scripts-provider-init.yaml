@@ -323,7 +323,7 @@ data:
           export USERNAME=`whoami`
           export K3S_HOME=/home/$USERNAME/k3s
           export KUBECONFIG=$K3S_HOME/k3s.yaml
-          export K3S_URL_FILE="https://dl.skycluster.io/k3s"
+          export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
           export K3S_BIN="/usr/local/bin"
 
           mkdir -p $K3S_HOME
@@ -354,15 +354,15 @@ data:
                 INSTALL_K3S_EXEC=" \
                   --node-ip $NODE_IP \
                   --service-cidr 192.168.0.0/16 \
-                  --cluster-dns 192.168.0.10 \
                   --flannel-backend=none \
                   --disable-network-policy \
                   --disable=traefik \
                   --node-label skycluster.io/node-type=control-plane \
-                  --node-label skycluster.io/provider-identifier=__PROVIDERNAME__-__REGION__-__ZONE__ \
-                  --node-label topology.kubernetes.io/region=__PROVIDERNAME__-__REGION__-__ZONE__ \
-                  --node-label topology.kubernetes.io/zone=__PROVIDERNAME__-__REGION__-__ZONE__ \
-                  --node-label skycluster.io/provider-region=__REGION__ " sh -; then
+                  --node-label skycluster.io/provider-platform=__PROVIDERPLATFORM__ \
+                  --node-label skycluster.io/provider-region=__REGION__ \
+                  --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
+                  --node-label topology.kubernetes.io/region=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
+                  --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ " sh -; then
                 install_success=true
                 break
               else
@@ -430,7 +430,7 @@ data:
 
           wait_for_kubeconfig
 
-          export PRIVATE_REGISTRY=__PRIVATE_REG_NAME__
+          # export PRIVATE_REGISTRY=__PRIVATE_REG_NAME__
 
           # Function to apply Tigera Operator with retries
           apply_tigera_operator() {
@@ -439,16 +439,16 @@ data:
             for ((i=1;i<=retries;i++)); do
 
               # Define the URL and output file
-              URL="https://raw.githubusercontent.com/projectcalico/calico/v3.29.2/manifests/tigera-operator.yaml"
+              URL="https://raw.githubusercontent.com/projectcalico/calico/v3.30.2/manifests/tigera-operator.yaml"
               OUTPUT_FILE="tigera-operator.yaml"
 
               # Download the file
               curl -L "$URL" -o "$OUTPUT_FILE"
 
               # If PRIVATE_REGISTRY is set, replace quay.io with its value in tigera-operator.yaml and custom-resources.yaml
-              if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
-                sed -i "s?quay.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
-              fi
+              # if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
+              #  sed -i "s?quay.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
+              # fi
 
               if kubectl create -f "$OUTPUT_FILE"; then
                 echo "Tigera Operator applied successfully."
@@ -482,6 +482,24 @@ data:
               sleep $wait
             fi
           done
+
+          # Wait for APIServer CRD to be established before creating the object
+          echo "Waiting for APIServer CRD to be available..."
+          retries=30
+          wait=10
+          for ((i=1;i<=retries;i++)); do
+            if kubectl get crd apiservers.operator.tigera.io > /dev/null 2>&1; then
+              echo "APIServer CRD is available."
+              break
+            else
+              echo "APIServer CRD not available yet. Attempt $i/$retries."
+              if [ "$i" -eq "$retries" ]; then
+                echo "APIServer CRD did not become available in time."
+                exit 1
+              fi
+              sleep $wait
+            fi
+          done
           
           cat <<EOF | kubectl apply -f -
           apiVersion: operator.tigera.io/v1
@@ -500,7 +518,7 @@ data:
           # Redirect all output to output.log
           exec > /root/k3s-metallb.log 2>&1
 
-          export PRIVATE_REGISTRY=__PRIVATE_REG_NAME__
+          # export PRIVATE_REGISTRY=__PRIVATE_REG_NAME__
 
           # Function to wait for kubeconfig generation
           wait_for_kubeconfig() {
@@ -525,14 +543,15 @@ data:
             local retries=5
             local wait=10
             for ((i=1;i<=retries;i++)); do
-              URL="https://skycluster.io/configs/metallb-native-v0.14.9.yaml"
+              URL="https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml"
+              # URL="https://skycluster.io/configs/metallb-native-v0.14.9.yaml"
               OUTPUT_FILE="metallb.yaml"
               curl -L "$URL" -o "$OUTPUT_FILE"
 
               # If PRIVATE_REGISTRY is set
-              if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
-                sed -i "s?quay.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
-              fi
+              # if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
+              #  sed -i "s?quay.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
+              # fi
               if kubectl create -f $OUTPUT_FILE; then
                 echo "Metallb applied successfully."
                 return 0
@@ -550,47 +569,79 @@ data:
         permissions: '0755'
         content: |
           #!/bin/bash
-          set -e
+          # set -e
+
+          # # Redirect all output to output.log
+          # exec > /root/k3s-gw-api.log 2>&1
+
+          # # Function to wait for kubeconfig generation
+          # wait_for_kubeconfig() {
+          #   local retries=50
+          #   local wait=5
+          #   for ((i=1;i<=retries;i++)); do
+          #     if sudo kubectl config view --flatten > /dev/null 2>&1; then
+          #       echo "Kubeconfig is valid."
+          #       return 0
+          #     else
+          #       echo "Kubeconfig file not generated yet. Attempt $i/$retries."
+          #       sleep $wait
+          #     fi
+          #   done
+          #   echo "kubeconfig file not generated after $retries attempts!"
+          #   exit 1
+          # }
+
+          # # Wait for kubeconfig
+          # wait_for_kubeconfig
+
+          # install_gw_api() {
+          #   local retries=5
+          #   local wait=10
+          #   for ((i=1;i<=retries;i++)); do
+          #     if kubectl create -f https://skycluster.io/configs/gateway-api-standard-v1.2.0.yaml; then
+          #       echo "Gateway API applied successfully."
+          #       return 0
+          #     else
+          #       echo "Failed to install Gateway API. Attempt $i/$retries."
+          #       sleep $wait
+          #     fi
+          #   done
+          #   echo "Failed to apply Gateway API after $retries attempts."
+          #   exit 1
+          # }
+          # install_gw_api
+      - path: /usr/local/bin/helm-install.sh
+        owner: root:root
+        permissions: '0755'
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
 
           # Redirect all output to output.log
-          exec > /root/k3s-gw-api.log 2>&1
+          exec > /root/helm-install.log 2>&1
 
-          # Function to wait for kubeconfig generation
-          wait_for_kubeconfig() {
-            local retries=50
-            local wait=5
-            for ((i=1;i<=retries;i++)); do
-              if sudo kubectl config view --flatten > /dev/null 2>&1; then
-                echo "Kubeconfig is valid."
-                return 0
-              else
-                echo "Kubeconfig file not generated yet. Attempt $i/$retries."
-                sleep $wait
-              fi
-            done
-            echo "kubeconfig file not generated after $retries attempts!"
-            exit 1
-          }
+          HELM_VERSION="v3.18.5"
 
-          # Wait for kubeconfig
-          wait_for_kubeconfig
+          ARCH=$(uname -m)
+          case "$ARCH" in
+              x86_64) ARCH="amd64" ;;
+              aarch64 | arm64) ARCH="arm64" ;;
+              armv7l) ARCH="arm" ;;
+              *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+          esac
 
-          install_gw_api() {
-            local retries=5
-            local wait=10
-            for ((i=1;i<=retries;i++)); do
-              if kubectl create -f https://skycluster.io/configs/gateway-api-standard-v1.2.0.yaml; then
-                echo "Gateway API applied successfully."
-                return 0
-              else
-                echo "Failed to install Gateway API. Attempt $i/$retries."
-                sleep $wait
-              fi
-            done
-            echo "Failed to apply Gateway API after $retries attempts."
-            exit 1
-          }
-          install_gw_api
+          TMP_DIR=$(mktemp -d)
+          cd "$TMP_DIR"
+
+          # https://get.helm.sh/helm-v3.18.5-linux-amd64.tar.gz
+          curl -sSL "https://get.helm.sh/helm-$HELM_VERSION-linux-$ARCH.tar.gz" -o helm.tar.gz
+          tar -xzf helm.tar.gz
+          sudo mv linux-$ARCH/helm /usr/local/bin/helm
+
+          cd -
+          rm -rf "$TMP_DIR"
+
+          echo "Helm $(helm version --short) installed successfully."
       - path: /usr/local/bin/k3s-istio.sh
         owner: root:root
         permissions: '0755'
@@ -622,27 +673,45 @@ data:
 
           wait_for_kubeconfig
 
+          make_temp_kubeconfig() {
+            local tmpfile
+            tmpfile="$(mktemp -t kubeconfig.XXXXXX)"
+            # shellcheck disable=SC2064
+
+            # Build the file from kubectl (using sudo to mirror your kubectl invocations)
+            # Note: --raw preserves auth/provider fields; --flatten embeds referenced certs/keys.
+            sudo kubectl config view --raw --flatten --minify > "$tmpfile"
+
+            echo "$tmpfile"
+          }
+
+          KUBECONFIG="$(make_temp_kubeconfig)"
+          echo "Using temporary kubeconfig at: $KUBECONFIG"
+
           install_istio() {
             local retries=5
             local wait=10
             for ((i=1;i<=retries;i++)); do
-              URL="https://skycluster.io/configs/istio-base-v1.25.0.yaml"
-              OUTPUT_FILE="istio-base.yaml"
-              curl -L "$URL" -o "$OUTPUT_FILE"
-
-              # If PRIVATE_REGISTRY is set
-              if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
-                sed -i "s?docker.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
-              fi
-              if kubectl apply -f $OUTPUT_FILE; then
-                echo "Istio base applied successfully."
-                return 0
+              if helm repo add istio https://istio-release.storage.googleapis.com/charts && helm repo update; then
+                echo "Helm repo for Istio added successfully."
+                break
               else
-                echo "Failed to install istio base. Attempt $i/$retries."
+                echo "Failed to add Helm repo. Attempt $i/$retries."
                 sleep $wait
               fi
             done
-            echo "Failed to apply istio base after $retries attempts."
+
+            # Install Istio base
+            for ((i=1;i<=retries;i++)); do
+              if helm upgrade --install istio-base istio/base -n istio-system --create-namespace --kubeconfig "$KUBECONFIG" --version 1.27.0; then
+                echo "Istio base installed successfully."
+                return 0
+              else
+                echo "Failed to install Istio base. Attempt $i/$retries."
+                sleep $wait
+              fi
+            done
+            echo "Failed to install Istio base after $retries attempts."
             exit 1
           }
           install_istio
@@ -650,19 +719,13 @@ data:
           install_istio_deploy() {
             local retries=5
             local wait=10
+            # Install Istio discovery (istiod)
             for ((i=1;i<=retries;i++)); do
-              URL="https://skycluster.io/configs/istio-deploy-v1.25.0.yaml"
-              OUTPUT_FILE="istio-deploy.yaml"
-              curl -L "$URL" -o "$OUTPUT_FILE"
-
-              if [ "$PRIVATE_REGISTRY" != "__PRIVATE_REG_NAME__" ]; then
-                sed -i "s?docker.io?$PRIVATE_REGISTRY?g" "$OUTPUT_FILE"
-              fi
-              if kubectl apply -f $OUTPUT_FILE; then
-                echo "Istio deployment applied successfully."
+              if helm upgrade --install istiod istio/istiod -n istio-system --kubeconfig "$KUBECONFIG"; then
+                echo "Istio control plane (istiod) installed successfully."
                 return 0
               else
-                echo "Failed to install istio deployment. Attempt $i/$retries."
+                echo "Failed to install istiod. Attempt $i/$retries."
                 sleep $wait
               fi
             done
@@ -676,7 +739,7 @@ data:
       - /usr/local/bin/k3s-install.sh
       - /usr/local/bin/k3s-calico.sh
       - /usr/local/bin/k3s-metallb.sh
-      - /usr/local/bin/k3s-gw-api.sh
+      - /usr/local/bin/helm-install.sh
       - /usr/local/bin/k3s-istio.sh
 
 {{ end }}
