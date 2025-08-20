@@ -72,4 +72,193 @@ data:
   ensureScript: |
     sudo apt-get update && sudo apt-get install -yq jq iproute2
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-k3s-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: sshtask
+    skycluster.io/script-init: k3s-agent
+data:
+  probeScript: |
+    # Defaults
+    compliant=true
+    agent_active=false
+    session_exists=false
+    version=""
+
+    # Retry a few times to see if the k3s agent is up
+    max_retries=10
+    retry_count=0
+    while [ $retry_count -lt $max_retries ]; do
+      if systemctl is-active --quiet k3s-agent; then
+        agent_active=true
+        break
+      fi
+      retry_count=$((retry_count + 1))
+      sleep 2
+    done
+
+    # Check for the install screen session (best-effort fact)
+    SESSION_NAME="k3s-agent-install"
+    if command -v screen >/dev/null 2>&1 && screen -list | grep -q "$SESSION_NAME"; then
+      session_exists=true
+    fi
+
+    # Determine version if k3s present
+    if command -v k3s >/dev/null 2>&1; then
+      # Example: "k3s version v1.29.5+k3s1 (....)"
+      version=$(k3s --version 2>/dev/null | awk 'NR==1{print $3}')
+    fi
+
+    # Compliance: agent must be active
+    if [ "$agent_active" != true ]; then
+      compliant=false
+    fi
+
+    jq -n \
+      --argjson compliant "$compliant" \
+      --argjson agentActive "$agent_active" \
+      --argjson sessionExists "$session_exists" \
+      --arg version "$version" \
+      '{facts:{k3s:{version:$version,agentActive:$agentActive,screenExists:$sessionExists}},compliant:$compliant}'
+  
+  ensureScript: |
+    # ---- Config / Inputs (placeholders expected to be templated) ----
+    USERNAME="$(whoami)"
+    K3S_HOME="/home/$USERNAME/k3s"
+    INTF_NAME="$(ip route get 8.8.8.8 | awk '{print $5; exit}')"
+    TOKEN="__K3STOKEN__"
+    HOST="__K3SHOSTIP__"
+    SESSION_NAME="k3s-agent-install"
+    export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
+
+    # ---- Prereqs ----
+    sudo apt-get update -y
+    sudo apt-get install -yq screen curl jq iproute2 netcat-openbsd
+
+    mkdir -p "$K3S_HOME/scripts" "$K3S_HOME/logs"
+
+    # Validate interface exists
+    if ! ip -o -4 a show | grep -q "$INTF_NAME"; then
+      echo "Error: $INTF_NAME interface not found." >&2
+      exit 1
+    fi
+    echo "INFO: Detected interface $INTF_NAME"
+
+    # Validate token
+    if [ -z "$TOKEN" ]; then
+      echo "Error: K3S token is empty." >&2
+      exit 1
+    fi
+    echo "INFO: K3S token provided"
+
+    # Validate HOST as IPv4
+    IPV4_REGEX='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+    if ! echo "$HOST" | grep -qE "$IPV4_REGEX"; then
+      echo "Error: $HOST is not a valid IPv4 address." >&2
+      exit 1
+    fi
+    echo "INFO: HOST $HOST is a valid IPv4"
+
+    # ---- Create worker script that waits for host & installs agent ----
+    cat > "$K3S_HOME/scripts/ping-and-install-agent.sh" <<'EOF'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    HOST="$HOST"
+    TOKEN="$TOKEN"
+    INTF_NAME="$INTF_NAME"
+
+    HOST_ACCESSIBLE=false
+    RETRY_COUNT=0
+    while [ "$HOST_ACCESSIBLE" = false ]; do
+      if ping -c 1 "$HOST" >/dev/null 2>&1; then
+        HOST_ACCESSIBLE=true
+        echo "INFO: $HOST is accessible. Attempt $RETRY_COUNT"
+      else
+        echo "INFO: Attempt $((RETRY_COUNT + 1)): $HOST not reachable. Retrying..."
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        sleep 2
+      fi
+    done
+
+    NODE_IP="$(ip -o -4 a show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)"
+
+    check_port() { nc -z "$HOST" 6443; }
+
+    until check_port; do
+      echo "INFO: Waiting for port 6443 on $HOST..."
+      sleep 3
+    done
+    echo "INFO: Port 6443 on $HOST is open."
+
+    max_retries=200
+    retry_count=0
+    install_success=false
+    HOSTNAME="$(hostname)"
+    K3S_BIN="/usr/local/bin"
+    sudo mkdir -p "$K3S_BIN"
+
+    while [ "$install_success" = false ] && [ $retry_count -lt $max_retries ]; do
+      echo "INFO: Download k3s from $K3S_URL_FILE (attempt $((retry_count + 1))/$max_retries)"
+      if curl --max-time 80 -sfL --retry 3 -C - "$K3S_URL_FILE" -o "/tmp/k3s"; then
+        echo "INFO: Downloaded k3s binary"
+        sudo install -m 0755 /tmp/k3s "$K3S_BIN/k3s"
+        echo "INFO: Installing k3s agent..."
+        if curl -sfL https://get.k3s.io | \
+          K3S_URL="https://$HOST:6443" \
+          INSTALL_K3S_SKIP_DOWNLOAD=true \
+          K3S_TOKEN="$TOKEN" \
+          INSTALL_K3S_EXEC=" \
+            --node-label skycluster.io/node-type=control-plane \
+            --node-label skycluster.io/provider-platform=__PROVIDERPLATFORM__ \
+            --node-label skycluster.io/provider-region=__REGION__ \
+            --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
+            --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
+            --node-name $HOSTNAME \
+            --node-ip $NODE_IP" sh -; then
+          install_success=true
+          echo "INFO: k3s agent install succeeded"
+          break
+        else
+          echo "WARN: k3s install attempt $((retry_count + 1)) failed; retrying..."
+          retry_count=$((retry_count + 1))
+          sleep 5
+        fi
+      else
+        echo "WARN: download attempt $((retry_count + 1)) failed; retrying..."
+        retry_count=$((retry_count + 1))
+        sleep 5
+      fi
+    done
+
+    if [ "$install_success" = true ]; then
+      exit 0
+    else
+      echo "ERROR: k3s agent installation did not succeed after retries." >&2
+      exit 1
+    fi
+    EOF
+
+    chmod +x "$K3S_HOME/scripts/ping-and-install-agent.sh"
+
+    # ---- Run in a detached screen ----
+    if ! screen -list | grep -q "$SESSION_NAME"; then
+      echo "INFO: Creating screen session ${SESSION_NAME}"
+      screen -dmS "$SESSION_NAME"
+      sleep 1
+    fi
+
+    echo "INFO: Executing worker script in screen"
+    screen -S "$SESSION_NAME" -X stuff "bash $K3S_HOME/scripts/ping-and-install-agent.sh > '$K3S_HOME/logs/k3s-install-$(date +%F_%H-%M).log' 2>&1 ^M"
+
+    # Success (probe will verify convergence)
+    exit 0
+
+
+---
+
 {{ end }}
