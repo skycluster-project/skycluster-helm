@@ -126,14 +126,14 @@ data:
       '{facts:{k3s:{version:$version,agentActive:$agentActive,screenExists:$sessionExists}},compliant:$compliant}'
   
   ensureScript: |
-    # ---- Config / Inputs (placeholders expected to be templated) ----
-    USERNAME="$(whoami)"
-    K3S_HOME="/home/$USERNAME/k3s"
-    INTF_NAME="$(ip route get 8.8.8.8 | awk '{print $5; exit}')"
-    TOKEN="__K3STOKEN__"
-    HOST="__K3SHOSTIP__"
-    SESSION_NAME="k3s-agent-install"
+    export USERNAME="$(whoami)"
+    export K3S_HOME="/home/$USERNAME/k3s"
+    export INTF_NAME="$(ip route get 8.8.8.8 | awk '{print $5; exit}')"
+    export TOKEN="__K3STOKEN__"
+    export HOST="__K3SHOSTIP__"
+    export SESSION_NAME="k3s-agent-install"
     export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
+
 
     # ---- Prereqs ----
     sudo apt-get update -y
@@ -164,78 +164,83 @@ data:
     echo "INFO: HOST $HOST is a valid IPv4"
 
     # ---- Create worker script that waits for host & installs agent ----
-    cat > "$K3S_HOME/scripts/ping-and-install-agent.sh" <<'EOF'
+    cat > "$K3S_HOME/scripts/ping-and-install-agent.sh" <<EOF
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Values baked in at generation time
     HOST="$HOST"
     TOKEN="$TOKEN"
     INTF_NAME="$INTF_NAME"
+    K3S_URL_FILE="$K3S_URL_FILE"
+
+
 
     HOST_ACCESSIBLE=false
     RETRY_COUNT=0
-    while [ "$HOST_ACCESSIBLE" = false ]; do
-      if ping -c 1 "$HOST" >/dev/null 2>&1; then
+    while [ "\$HOST_ACCESSIBLE" = false ]; do
+      if ping -c 1 "\$HOST" >/dev/null 2>&1; then
         HOST_ACCESSIBLE=true
-        echo "INFO: $HOST is accessible. Attempt $RETRY_COUNT"
+        echo "INFO: \$HOST is accessible. Attempt \$RETRY_COUNT"
       else
-        echo "INFO: Attempt $((RETRY_COUNT + 1)): $HOST not reachable. Retrying..."
-        RETRY_COUNT=$((RETRY_COUNT + 1))
+        echo "INFO: Attempt \$((RETRY_COUNT + 1)): \$HOST not reachable. Retrying..."
+        RETRY_COUNT=\$((RETRY_COUNT + 1))
         sleep 2
       fi
     done
 
-    NODE_IP="$(ip -o -4 a show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)"
+    NODE_IP="\$(ip -o -4 a show "\$INTF_NAME" | awk '{print \$4}' | cut -d/ -f1)"
 
-    check_port() { nc -z "$HOST" 6443; }
+
+    check_port() { nc -z "\$HOST" 6443; }
 
     until check_port; do
-      echo "INFO: Waiting for port 6443 on $HOST..."
+      echo "INFO: Waiting for port 6443 on \$HOST..."
       sleep 3
     done
-    echo "INFO: Port 6443 on $HOST is open."
+    echo "INFO: Port 6443 on \$HOST is open."
 
     max_retries=200
     retry_count=0
     install_success=false
-    HOSTNAME="$(hostname)"
+    HOSTNAME="\$(hostname)"
     K3S_BIN="/usr/local/bin"
-    sudo mkdir -p "$K3S_BIN"
+    sudo mkdir -p "\$K3S_BIN"
 
-    while [ "$install_success" = false ] && [ $retry_count -lt $max_retries ]; do
-      echo "INFO: Download k3s from $K3S_URL_FILE (attempt $((retry_count + 1))/$max_retries)"
-      if curl --max-time 80 -sfL --retry 3 -C - "$K3S_URL_FILE" -o "/tmp/k3s"; then
+    while [ "\$install_success" = false ] && [ \$retry_count -lt \$max_retries ]; do
+      echo "INFO: Download k3s from \$K3S_URL_FILE (attempt \$((retry_count + 1))/\$max_retries)"
+      if curl --max-time 80 -sfL --retry 3 -C - "\$K3S_URL_FILE" -o "/tmp/k3s"; then
         echo "INFO: Downloaded k3s binary"
-        sudo install -m 0755 /tmp/k3s "$K3S_BIN/k3s"
+        sudo install -m 0755 /tmp/k3s "\$K3S_BIN/k3s"
         echo "INFO: Installing k3s agent..."
         if curl -sfL https://get.k3s.io | \
-          K3S_URL="https://$HOST:6443" \
+          K3S_URL="https://\$HOST:6443" \
           INSTALL_K3S_SKIP_DOWNLOAD=true \
-          K3S_TOKEN="$TOKEN" \
+          K3S_TOKEN="\$TOKEN" \
           INSTALL_K3S_EXEC=" \
             --node-label skycluster.io/node-type=control-plane \
             --node-label skycluster.io/provider-platform=__PROVIDERPLATFORM__ \
             --node-label skycluster.io/provider-region=__REGION__ \
             --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
             --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
-            --node-name $HOSTNAME \
-            --node-ip $NODE_IP" sh -; then
+            --node-name \$HOSTNAME \
+            --node-ip \$NODE_IP" sh -; then
           install_success=true
           echo "INFO: k3s agent install succeeded"
           break
         else
-          echo "WARN: k3s install attempt $((retry_count + 1)) failed; retrying..."
-          retry_count=$((retry_count + 1))
+          echo "WARN: k3s install attempt \$((retry_count + 1)) failed; retrying..."
+          retry_count=\$((retry_count + 1))
           sleep 5
         fi
       else
-        echo "WARN: download attempt $((retry_count + 1)) failed; retrying..."
-        retry_count=$((retry_count + 1))
+        echo "WARN: download attempt \$((retry_count + 1)) failed; retrying..."
+        retry_count=\$((retry_count + 1))
         sleep 5
       fi
     done
 
-    if [ "$install_success" = true ]; then
+    if [ "\$install_success" = true ]; then
       exit 0
     else
       echo "ERROR: k3s agent installation did not succeed after retries." >&2
