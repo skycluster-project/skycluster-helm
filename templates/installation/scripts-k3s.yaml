@@ -1,0 +1,75 @@
+{{ if .Values.install }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-k3s-controller-check
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: sshtask
+    skycluster.io/script-init: k3s-controller-check
+data:
+  probeScript: |
+    COMPLIANT=true
+    INTF_NAME=""
+    IP_ADDR=""
+    KUBECONFIG=""
+    TOKEN=""
+
+    # Preconditions
+    if ! sudo kubectl config view --flatten >/dev/null 2>&1; then
+      COMPLIANT=false
+    fi
+
+    if $COMPLIANT; then
+      INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}' || true)
+      if [[ -z "$INTF_NAME" ]]; then
+        COMPLIANT=false
+      else
+        IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1 || true)
+        if [[ -z "$IP_ADDR" ]]; then
+          COMPLIANT=false
+        fi
+      fi
+    fi
+
+    KUBECONFIG=""
+    if $COMPLIANT; then
+      KUBECONFIG=$(sudo kubectl config view --flatten | sed "s/127.0.0.1/$IP_ADDR/" | base64 -w0 || true)
+      if [[ -z "$KUBECONFIG" ]]; then
+        COMPLIANT=false
+      fi
+    fi
+
+    file_path="/home/root/k3s/k3s.token.ip.json"
+    if [[ -f "$file_path" ]]; then
+      BASE_JSON=$(cat "$file_path")
+      if ! echo "$BASE_JSON" | jq empty >/dev/null 2>&1; then
+        COMPLIANT=false
+      fi
+      TOKEN=$(echo "$BASE_JSON" | jq -r '.token // empty')
+      if [ -z "$TOKEN" ]; then
+        echo "TOKEN is not set"
+        COMPLIANT=false
+      fi
+    else
+      COMPLIANT=false
+    fi
+
+    jq -n \
+      --arg iface "$INTF_NAME" \
+      --arg ip "$IP_ADDR" \
+      --arg token "$TOKEN" \
+      --arg kube_b64 "$KUBECONFIG" \
+      --argjson c "$COMPLIANT" \
+      '{
+        facts:{
+          network:{interface:$iface, ip:$ip},
+          kubeconfig:{encoded:$kube_b64, token:$token},
+        },
+        compliant:$c
+      }'
+  ensureScript: |
+    sudo apt-get update && sudo apt-get install -yq jq iproute2
+---
+{{ end }}

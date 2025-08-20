@@ -51,6 +51,19 @@ data:
         content: |
           #!/bin/bash
           echo "Generating CA certificate" >> /root/generate-ca-cert.log
+
+          max_retries=5
+          count=0
+
+          until apt-get update -qq && apt-get install -yq ca-certificates jq; do
+            count=$((count+1))
+            if [ "$count" -ge "$max_retries" ]; then
+              echo "Failed to install apt packages after $count attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
           ENCODED_CA=__CA_CERTIFICATE_ENCODED__
           if [ -z "$ENCODED_CA" ]; then
             echo "CA certificate is not set. Exiting." >> /root/generate-ca-cert.log
@@ -400,7 +413,7 @@ data:
             echo "Error: Failed to write the node token to the file." 
             exit 1
           fi
-          echo $TOKEN";"$NODE_IP >> $K3S_HOME/k3s.token.ip 
+          jq -n --arg token "$TOKEN" --arg node_ip "$NODE_IP" '{"token":$token,"node_ip":$node_ip}' >> "$K3S_HOME/k3s.token.ip.json"
       - path: /usr/local/bin/k3s-calico.sh
         owner: root:root
         permissions: '0755'
