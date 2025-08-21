@@ -367,7 +367,7 @@ data:
                 INSTALL_K3S_EXEC=" \
                   --node-ip $NODE_IP \
                   --service-cidr 192.168.0.0/16 \
-                  --flannel-backend=none \
+                  --flannel-backend=wireguard-native \
                   --disable-network-policy \
                   --disable=traefik \
                   --node-label skycluster.io/node-type=control-plane \
