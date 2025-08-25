@@ -17,11 +17,34 @@ data:
         owner: root:root
         permissions: '0755'
         content: |
-          #!/bin/bash
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          # Redirect all output (stdout + stderr) to log file
+          exec > >(tee -a /root/routing-gateway.logs) 2>&1
+
+          GW_ADDR="__GW_ADDRESS__"
+
+          # Check if GW_ADDR looks like an IP (basic validation)
+          if ! [[ "$GW_ADDR" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+              echo "ERROR: Invalid gateway address: $GW_ADDR"
+              exit 1
+          fi
+
           # Caution: The route to the gateway returns the interface name as the third column
           # However, the route to the internet returns the interface name as the fifth column
           INTF_NAME=$(ip route get __GW_ADDRESS__ | awk '{print $3; exit}')
-          sudo ip route replace default via __GW_ADDRESS__ dev $INTF_NAME
+          if [[ -z "$INTF_NAME" ]]; then
+              echo "ERROR: Could not determine interface for gateway $GW_ADDR"
+              exit 1
+          fi
+
+          if sudo ip route replace default via "$GW_ADDR" dev "$INTF_NAME"; then
+              echo "Default route successfully set to $GW_ADDR via $INTF_NAME"
+          else
+              echo "ERROR: Failed to update default route"
+              exit 1
+          fi
     runcmd:
       - /usr/local/bin/install-routes-gateway.sh
       - 'echo "*/5 * * * * sudo /usr/local/bin/install-routes-gateway.sh" | sudo crontab -u root -'

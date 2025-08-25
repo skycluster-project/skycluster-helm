@@ -352,6 +352,13 @@ data:
             exit 1
           fi
           export NODE_IP=`ip -o -4 a show $INTF_NAME | awk '{print $4}' | cut -d/ -f1`
+          export PUBLIC_IP=`curl ifconfig.io`
+
+          ADVERTISE_IP=$PUBLIC_IP
+          if [ -z "$PUBLIC_IP" ]; then
+            echo "Failed to retrieve public IP. Use node ip instead."
+            ADVERTISE_IP=$NODE_IP
+          fi
 
           max_retries=10
           retry_count=0
@@ -365,8 +372,10 @@ data:
                 INSTALL_K3S_SKIP_DOWNLOAD=true \
                 K3S_KUBECONFIG_MODE="644" \
                 INSTALL_K3S_EXEC=" \
+                  --cluster-cidr __CLUSTER_CIDR__ \
+                  --advertise-address $ADVERTISE_IP \
                   --node-ip $NODE_IP \
-                  --service-cidr 192.168.0.0/16 \
+                  --service-cidr __SERVICE_CIDR__ \
                   --flannel-backend=wireguard-native \
                   --disable-network-policy \
                   --disable=traefik \
@@ -750,9 +759,9 @@ data:
 
     runcmd:
       - /usr/local/bin/k3s-install.sh
-      - /usr/local/bin/k3s-calico.sh
+      # - /usr/local/bin/k3s-calico.sh
       - /usr/local/bin/k3s-metallb.sh
       - /usr/local/bin/helm-install.sh
-      - /usr/local/bin/k3s-istio.sh
+      # - /usr/local/bin/k3s-istio.sh
 
 {{ end }}

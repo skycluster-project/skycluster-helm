@@ -1,0 +1,387 @@
+{{ if .Values.install }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-istio-root-certs
+  namespace: skycluster-system
+  labels:
+    skycluster.io/config-type: istio-root-cacerts
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ---- Config ----
+    NAMESPACE="${NAMESPACE:?Environment variable NAMESPACE must be set}"
+    ROOT_SECRET_NAME="${ROOT_SECRET_NAME:-istio-root-ca}"
+    MANAGED_LABEL_KEY="skycluster.io/managed-by"
+    MANAGED_LABEL_VAL="skycluster"
+    KCFG_SELECTOR="${KCFG_SELECTOR:-skycluster.io/secret-type=k8s-connection-data}"
+    
+    export PATH=$PATH:/opt/bitnami/kubectl/bin:/usr/local/bin
+    which kubectl || echo "WARNING: Kubectl not found"
+
+    WORKDIR="/work"
+    ISTIO_VER="1.27.0"
+
+    mkdir -p "${WORKDIR}"
+    cd "${WORKDIR}"
+
+    ISTIO_URL="https://github.com/istio/istio/releases/download/1.27.0/istio-1.27.0-linux-amd64.tar.gz"
+    curl -fsSL "${ISTIO_URL}" -o istio.tar.gz
+    tar -xzf istio.tar.gz
+
+    ISTIO_DIR="${WORKDIR}/istio-${ISTIO_VER}"
+
+    echo "==> Check/Create ROOT CA secret '${ROOT_SECRET_NAME}'…"
+    if ! kubectl -n "${NAMESPACE}" get secret "${ROOT_SECRET_NAME}" >/dev/null 2>&1; then
+      echo "    Generating root CA…"
+      pushd "${ISTIO_DIR}/samples" >/dev/null
+      make -f ../tools/certs/Makefile.selfsigned.mk root-ca
+      echo "    Root CA generated."
+      popd >/dev/null
+      echo "    Creating ROOT CA secret '${ROOT_SECRET_NAME}'…"
+      kubectl -n "${NAMESPACE}" create secret generic "${ROOT_SECRET_NAME}" \
+        --from-file=root-cert.pem="${ISTIO_DIR}/samples/root-cert.pem" \
+        --from-file=root-key.pem="${ISTIO_DIR}/samples/root-key.pem" \
+        --from-file=root-ca.conf="${ISTIO_DIR}/samples/root-ca.conf" \
+        --from-file=root-cert.csr="${ISTIO_DIR}/samples/root-cert.csr" \
+        --dry-run=client -o yaml \
+      | kubectl label --local -f - --overwrite \
+          "${MANAGED_LABEL_KEY}=${MANAGED_LABEL_VAL}" \
+          "skycluster.io/secret-type=istio-root-ca" -o yaml \
+      | kubectl -n "${NAMESPACE}" apply -f -
+      ROOT_ACTION="created"
+    else
+      ROOT_ACTION="reused"
+      echo "    Root CA secret exists; reuse."
+    fi    
+
+    created_cacerts=()
+    reused_cacerts=()
+    patched_remote=()
+
+    # create cacerts for the local management cluster
+    C="k8s-skycluster-management"
+    CLUSTER_NAME="k8s-skycluster-management"
+    echo "==> Cluster: ${C} and cluster name: ${CLUSTER_NAME}"
+
+    # Extract kubeconfig to temp
+    tmpdir="$(mktemp -d)"
+
+    CACERTS_SECRET="${C}-cacerts"
+    C_DNSSAFE="${CLUSTER_NAME//./-}"
+    echo "==> DNS Safe Label: ${C_DNSSAFE}"
+    CACERTS_SECRET="${CACERTS_SECRET:0:63}"
+    if ! kubectl -n "${NAMESPACE}" get secret "${CACERTS_SECRET}" >/dev/null 2>&1; then
+      echo "    Generating intermediate CA for ${C}…"
+      pushd "${ISTIO_DIR}/samples" >/dev/null
+      make -f ../tools/certs/Makefile.selfsigned.mk "${C}-cacerts"
+      popd >/dev/null
+      kubectl -n "${NAMESPACE}" create secret generic "${CACERTS_SECRET}" \
+        --from-file=ca-cert.pem="${ISTIO_DIR}/samples/${C}/ca-cert.pem" \
+        --from-file=ca-key.pem="${ISTIO_DIR}/samples/${C}/ca-key.pem" \
+        --from-file=cert-chain.pem="${ISTIO_DIR}/samples/${C}/cert-chain.pem" \
+        --from-file=root-cert.pem="${ISTIO_DIR}/samples/${C}/root-cert.pem" \
+        --dry-run=client -o yaml \
+      | kubectl label --local -f - --overwrite \
+          "${MANAGED_LABEL_KEY}=${MANAGED_LABEL_VAL}" \
+          "skycluster.io/secret-type=cluster-cacert" \
+          "skycluster.io/cluster-name=${C_DNSSAFE}" \
+          --dry-run=client -o yaml \
+      | kubectl -n "${NAMESPACE}" apply -f -
+      created_cacerts+=("$C")
+    else
+      echo "    Found ${CACERTS_SECRET}; reuse."
+      reused_cacerts+=("$C")
+    fi
+
+    echo "    Creating remote-secret for ${C}…"
+    istioctl create-remote-secret --name="${C}" > "${tmpdir}/remote-secret.yaml"
+    b64_remote="$(base64 -w0 < "${tmpdir}/remote-secret.yaml")"
+
+    # Patch kubeconfig secret with remote-secret.yaml (data field)
+    kubectl -n "${NAMESPACE}" get secret "${CACERTS_SECRET}" -o json \
+      | jq --arg v "${b64_remote}" '.data["remote-secret.yaml"]=$v' \
+      | kubectl -n "${NAMESPACE}" apply -f -
+    kubectl -n "${NAMESPACE}" label secret "${CACERTS_SECRET}" --overwrite "${MANAGED_LABEL_KEY}=${MANAGED_LABEL_VAL}" "skycluster.io/cluster-name=${C_DNSSAFE}" >/dev/null
+    patched_remote+=("$C")
+
+
+    echo "----- RESULT SUMMARY -----"
+    echo "root_ca: ${ROOT_ACTION}"
+    echo "----- CA CERTS (local management cluster) -----"
+    echo "created_cacerts: ${created_cacerts[*]-}"
+    echo "reused_cacerts: ${reused_cacerts[*]-}"
+    echo "patched_remote_secrets: ${patched_remote[*]-}"
+    
+    echo "SUCCESS"
+    exit 0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-istio-cluster-certs
+  namespace: skycluster-system
+  labels:
+    skycluster.io/config-type: istio-cluster-cacerts
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ---- Config ----
+    NAMESPACE="${NAMESPACE:?Environment variable NAMESPACE must be set}"
+    ROOT_SECRET_NAME="${ROOT_SECRET_NAME:-istio-root-ca}"
+    MANAGED_LABEL_KEY="skycluster.io/managed-by"
+    MANAGED_LABEL_VAL="skycluster"
+    KCFG_SELECTOR="${KCFG_SELECTOR:-skycluster.io/secret-type=k8s-connection-data}"
+    
+    export PATH=$PATH:/opt/bitnami/kubectl/bin:/usr/local/bin
+    which kubectl || echo "WARNING: Kubectl not found"
+
+    WORKDIR="/work"
+    ISTIO_VER="1.27.0"
+
+    mkdir -p "${WORKDIR}"
+    cd "${WORKDIR}"
+
+    ISTIO_URL="https://github.com/istio/istio/releases/download/1.27.0/istio-1.27.0-linux-amd64.tar.gz"
+    curl -fsSL "${ISTIO_URL}" -o istio.tar.gz
+    tar -xzf istio.tar.gz
+
+    ISTIO_DIR="${WORKDIR}/istio-${ISTIO_VER}"
+
+    echo "==> Check ROOT CA secret '${ROOT_SECRET_NAME}'…"
+    if ! kubectl -n "${NAMESPACE}" get secret "${ROOT_SECRET_NAME}" >/dev/null 2>&1; then
+      echo "    ERROR: ROOT CA does not exist"
+      exit 1
+    else
+      ROOT_ACTION="reused"
+      echo "    Root CA secret exists."
+    fi    
+
+    echo "==> List kubeconfig secrets clients (selector: ${KCFG_SELECTOR})"
+    all_kcfg_json="$(kubectl -n "${NAMESPACE}" get secret -l "${KCFG_SELECTOR}" -o json)"
+
+    # Parse cluster list
+    # We generate cacerts for all secrets available, 
+    # TODO: make sure the list is filtered based on user input
+    mapfile -t CLUSTER_LIST < <(
+      jq -r '.items[] | "\(.metadata.name)\t\(.metadata.labels["skycluster.io/cluster-name"] // "")"' <<< "${all_kcfg_json}" \
+        | sed '/^\s*$/d' \
+        | sort -u
+    )
+
+    created_cacerts=()
+    reused_cacerts=()
+    patched_remote=()
+
+    for ENTRY in "${CLUSTER_LIST[@]:-}"; do
+      C=$(awk -F'\t' '{print $1}' <<< "$ENTRY")
+      CLUSTER_NAME=$(awk -F'\t' '{print $2}' <<< "$ENTRY")
+      echo "==> Cluster: ${C} and cluster name: ${CLUSTER_NAME}"
+
+      # Extract kubeconfig to temp
+      tmpdir="$(mktemp -d)"
+      kubectl -n "${NAMESPACE}" get secret "${C}" -o json \
+        | jq -r '.data.kubeconfig' | base64 -d > "${tmpdir}/kubeconfig"
+
+      CACERTS_SECRET="${C}-cacerts"
+      C_DNSSAFE="${CLUSTER_NAME//./-}"
+      echo "==> DNS Safe Label: ${C_DNSSAFE}"
+      CACERTS_SECRET="${CACERTS_SECRET:0:63}"
+      if ! kubectl -n "${NAMESPACE}" get secret "${CACERTS_SECRET}" >/dev/null 2>&1; then
+        echo "    Generating intermediate CA for ${C}…"
+        pushd "${ISTIO_DIR}/samples" >/dev/null
+        make -f ../tools/certs/Makefile.selfsigned.mk "${C}-cacerts"
+        popd >/dev/null
+        kubectl -n "${NAMESPACE}" create secret generic "${CACERTS_SECRET}" \
+          --from-file=ca-cert.pem="${ISTIO_DIR}/samples/${C}/ca-cert.pem" \
+          --from-file=ca-key.pem="${ISTIO_DIR}/samples/${C}/ca-key.pem" \
+          --from-file=cert-chain.pem="${ISTIO_DIR}/samples/${C}/cert-chain.pem" \
+          --from-file=root-cert.pem="${ISTIO_DIR}/samples/${C}/root-cert.pem" \
+          --dry-run=client -o yaml \
+        | kubectl label --local -f - --overwrite \
+            "${MANAGED_LABEL_KEY}=${MANAGED_LABEL_VAL}" \
+            "skycluster.io/secret-type=cluster-cacert" \
+            "skycluster.io/cluster-name=${C_DNSSAFE}" \
+            --dry-run=client -o yaml \
+        | kubectl -n "${NAMESPACE}" apply -f -
+        created_cacerts+=("$C")
+      else
+        echo "    Found ${CACERTS_SECRET}; reuse."
+        reused_cacerts+=("$C")
+      fi
+
+      echo "    Creating remote-secret for ${C}…"
+      istioctl create-remote-secret --kubeconfig="${tmpdir}/kubeconfig" --name="${C}" > "${tmpdir}/remote-secret.yaml"
+      b64_remote="$(base64 -w0 < "${tmpdir}/remote-secret.yaml")"
+
+      # Patch kubeconfig secret with remote-secret.yaml (data field)
+      kubectl -n "${NAMESPACE}" get secret "${CACERTS_SECRET}" -o json \
+        | jq --arg v "${b64_remote}" '.data["remote-secret.yaml"]=$v' \
+        | kubectl -n "${NAMESPACE}" apply -f -
+      kubectl -n "${NAMESPACE}" label secret "${CACERTS_SECRET}" --overwrite "${MANAGED_LABEL_KEY}=${MANAGED_LABEL_VAL}" "skycluster.io/cluster-name=${C_DNSSAFE}" >/dev/null
+      patched_remote+=("$C")
+    done
+
+    
+
+    echo "----- RESULT SUMMARY -----"
+    echo "created_cacerts: ${created_cacerts[*]-}"
+    echo "reused_cacerts: ${reused_cacerts[*]-}"
+    echo "patched_remote_secrets: ${patched_remote[*]-}"
+    
+    echo "SUCCESS"
+    exit 0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: script-helm-clean-up
+  namespace: skycluster-system
+  labels:
+    skycluster.io/config-type: helm-clean-up
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    export PATH=$PATH:/opt/bitnami/kubectl/bin:/usr/local/bin
+    command -v kubectl >/dev/null || echo "WARNING: kubectl not found in PATH"
+    command -v helm >/dev/null || echo "WARNING: helm not found in PATH"
+
+    : "${CHART_NAMESPACE:?CHART_NAMESPACE must be set}"
+    : "${KUBECONFIG_DATA:?KUBECONFIG_DATA must be set (base64 kubeconfig or 'local')}"
+
+    CHART_NAME="${CHART_NAME:-}"
+    BLOCKING_OBJECTS="${BLOCKING_OBJECTS:-}"                   # e.g., "serviceaccount/foo configmap/bar"
+    CLUSTERROLE_PREFIX="${CLUSTERROLE_PREFIX:-}"               # eg. "submariner"
+
+    KUBECONFIG_ARG=()
+    if [[ "$KUBECONFIG_DATA" != "local" ]]; then
+      KUBECONFIG_FILE="$(mktemp)"
+      trap 'rm -f "$KUBECONFIG_FILE"' EXIT
+      echo "$KUBECONFIG_DATA" | base64 -d >"$KUBECONFIG_FILE"
+      echo "Using generated kubeconfig at $KUBECONFIG_FILE"
+      KUBECONFIG_ARG=(--kubeconfig "$KUBECONFIG_FILE")
+    else
+      echo "Using local kubeconfig"
+    fi
+
+    echo "=== Helm/K8s cleanup${CHART_NAME:+ for chart }$CHART_NAME (namespace: $CHART_NAMESPACE) ==="
+    printf "Cluster API server: "
+    kubectl "${KUBECONFIG_ARG[@]}" config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo
+
+    # --- Namespaced cleanup ---
+    if ! kubectl "${KUBECONFIG_ARG[@]}" get ns "$CHART_NAMESPACE" >/dev/null 2>&1; then
+      echo "Namespace '$CHART_NAMESPACE' not found; skipping namespaced cleanup."
+    else
+      releases="$(helm "${KUBECONFIG_ARG[@]}" list -n "$CHART_NAMESPACE" -q 2>/dev/null || true)"
+      if [[ -z "$releases" ]]; then
+        echo "No Helm releases found in namespace $CHART_NAMESPACE."
+      else
+        for r in $releases; do
+          echo "Uninstalling Helm release: $r"
+          helm "${KUBECONFIG_ARG[@]}" uninstall "$r" -n "$CHART_NAMESPACE" || true
+        done
+      fi
+
+
+      echo "Deleting explicitly-blocking objects (with finalizer patch if needed)…"
+      for obj in $BLOCKING_OBJECTS; do
+        kind="${obj%%/*}"; name="${obj##*/}"
+        if kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" get "$kind" "$name" >/dev/null 2>&1; then
+          # Try normal delete first
+          kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" delete "$kind" "$name" --ignore-not-found --wait=false || true
+
+          # If it lingers, remove finalizers via patch, then delete again
+          if kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" get "$kind" "$name" >/dev/null 2>&1; then
+            echo "Patching finalizers off $kind/$name …"
+            kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" patch "$kind" "$name" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+            kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" delete "$kind" "$name" --ignore-not-found --wait=false || true
+          fi
+
+          # Last resort
+          kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" get "$kind" "$name" >/dev/null 2>&1 \
+            && kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" delete "$kind" "$name" --force --grace-period=0 || true
+        else
+          echo "$kind/$name not present in $CHART_NAMESPACE."
+        fi
+      done
+
+    fi
+
+
+    # --- Cluster-scoped cleanup: ClusterRoles by prefix ---
+    if [[ -n "$CLUSTERROLE_PREFIX" ]]; then
+      echo "=== ClusterRole cleanup for prefix: '$CLUSTERROLE_PREFIX' ==="
+      # List ClusterRoles whose names start with the prefix
+      mapfile -t clusterroles_to_delete < <(
+        kubectl "${KUBECONFIG_ARG[@]}" get clusterrole -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+          | grep -E "^${CLUSTERROLE_PREFIX}" || true
+      )
+
+      if ((${#clusterroles_to_delete[@]} == 0)); then
+        echo "No ClusterRoles found with prefix '${CLUSTERROLE_PREFIX}'."
+      else
+        for cr in "${clusterroles_to_delete[@]}"; do
+          echo "Deleting ClusterRole: $cr"
+          # Try normal delete first
+          kubectl "${KUBECONFIG_ARG[@]}" delete clusterrole "$cr" --ignore-not-found --wait=false || true
+
+          # If it lingers (rare for ClusterRoles), clear finalizers then delete again
+          if kubectl "${KUBECONFIG_ARG[@]}" get clusterrole "$cr" >/dev/null 2>&1; then
+            echo "Patching finalizers off clusterrole/$cr …"
+            kubectl "${KUBECONFIG_ARG[@]}" patch clusterrole "$cr" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+            kubectl "${KUBECONFIG_ARG[@]}" delete clusterrole "$cr" --ignore-not-found --wait=false || true
+          fi
+
+          # Last resort
+          kubectl "${KUBECONFIG_ARG[@]}" get clusterrole "$cr" >/dev/null 2>&1 \
+            && kubectl "${KUBECONFIG_ARG[@]}" delete clusterrole "$cr" --force --grace-period=0 || true
+        done
+      fi
+    fi
+
+
+
+
+    # --- Cluster-scoped cleanup: ClusterRoleBindings by prefix ---
+    if [[ -n "$CLUSTERROLE_PREFIX" ]]; then
+      echo "=== ClusterRoleBinding cleanup for prefix: '$CLUSTERROLE_PREFIX' ==="
+      # List ClusterRoleBindings whose names start with the prefix
+      mapfile -t crbs_to_delete < <(
+        kubectl "${KUBECONFIG_ARG[@]}" get clusterrolebinding -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+          | grep -E "^${CLUSTERROLE_PREFIX}" || true
+      )
+
+      if ((${#crbs_to_delete[@]} == 0)); then
+        echo "No ClusterRoleBindings found with prefix '${CLUSTERROLE_PREFIX}'."
+      else
+        for crb in "${crbs_to_delete[@]}"; do
+          echo "Deleting ClusterRoleBinding: $crb"
+          # Try normal delete first
+          kubectl "${KUBECONFIG_ARG[@]}" delete clusterrolebinding "$crb" --ignore-not-found --wait=false || true
+
+          # If it lingers (rare for CRBs), clear finalizers then delete again
+          if kubectl "${KUBECONFIG_ARG[@]}" get clusterrolebinding "$crb" >/dev/null 2>&1; then
+            echo "Patching finalizers off clusterrolebinding/$crb …"
+            kubectl "${KUBECONFIG_ARG[@]}" patch clusterrolebinding "$crb" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+            kubectl "${KUBECONFIG_ARG[@]}" delete clusterrolebinding "$crb" --ignore-not-found --wait=false || true
+          fi
+
+          # Last resort
+          kubectl "${KUBECONFIG_ARG[@]}" get clusterrolebinding "$crb" >/dev/null 2>&1 \
+            && kubectl "${KUBECONFIG_ARG[@]}" delete clusterrolebinding "$crb" --force --grace-period=0 || true
+        done
+      fi
+    fi
+
+    
+
+    echo "Cleanup complete for namespace $CHART_NAMESPACE."
+
+---
+{{ end }}

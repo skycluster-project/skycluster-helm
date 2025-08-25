@@ -207,6 +207,23 @@ data:
     K3S_BIN="/usr/local/bin"
     sudo mkdir -p "\$K3S_BIN"
 
+    K3S_EXTRA_LABELS='__NODE_LABELS__'
+    EXTRA_LABELS=""
+
+    if [ -n "\$K3S_EXTRA_LABELS" ]; then
+      if echo "\$K3S_EXTRA_LABELS" | jq -e . >/dev/null 2>&1; then
+        # JSON object -> key=value lines
+        while IFS= read -r label; do
+          EXTRA_LABELS+=" --node-label \$label"
+        done < <(printf '%s' "\$K3S_EXTRA_LABELS" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
+      else
+        # Allow comma/space-separated key=value input
+        for label in \${K3S_EXTRA_LABELS//,/ }; do
+          [ -n "\$label" ] && EXTRA_LABELS+=" --node-label \$label"
+        done
+      fi
+    fi
+
     while [ "\$install_success" = false ] && [ \$retry_count -lt \$max_retries ]; do
       echo "INFO: Download k3s from \$K3S_URL_FILE (attempt \$((retry_count + 1))/\$max_retries)"
       if curl --max-time 80 -sfL --retry 3 -C - "\$K3S_URL_FILE" -o "/tmp/k3s"; then
@@ -224,7 +241,8 @@ data:
             --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
             --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
             --node-name \$HOSTNAME \
-            --node-ip \$NODE_IP" sh -; then
+            --node-ip \$NODE_IP \
+            \$EXTRA_LABELS" sh -; then
           install_success=true
           echo "INFO: k3s agent install succeeded"
           break
