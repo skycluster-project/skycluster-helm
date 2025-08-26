@@ -266,13 +266,12 @@ data:
       echo "$KUBECONFIG_DATA" | base64 -d >"$KUBECONFIG_FILE"
       echo "Using generated kubeconfig at $KUBECONFIG_FILE"
       KUBECONFIG_ARG=(--kubeconfig "$KUBECONFIG_FILE")
+      printf "Cluster API server: "
+      kubectl "${KUBECONFIG_ARG[@]}" config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo
     else
       echo "Using local kubeconfig"
+      echo "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
     fi
-
-    echo "=== Helm/K8s cleanup${CHART_NAME:+ for chart }$CHART_NAME (namespace: $CHART_NAMESPACE) ==="
-    printf "Cluster API server: "
-    kubectl "${KUBECONFIG_ARG[@]}" config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo
 
     # --- Namespaced cleanup ---
     if ! kubectl "${KUBECONFIG_ARG[@]}" get ns "$CHART_NAMESPACE" >/dev/null 2>&1; then
@@ -310,6 +309,18 @@ data:
           echo "$kind/$name not present in $CHART_NAMESPACE."
         fi
       done
+
+      echo "Deleting ServiceAccounts starting with prefix '$CLUSTERROLE_PREFIX' in namespace $CHART_NAMESPACE..."
+      sa_list="$(kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" get sa -o name 2>/dev/null | grep "^serviceaccount/${CLUSTERROLE_PREFIX}" || true)"
+      if [[ -n "$sa_list" ]]; then
+        for sa in $sa_list; do
+          echo "Deleting $sa"
+          kubectl "${KUBECONFIG_ARG[@]}" -n "$CHART_NAMESPACE" delete "$sa" --ignore-not-found --wait=false || true
+        done
+      else
+        echo "No ServiceAccounts with prefix '$CLUSTERROLE_PREFIX' found in $CHART_NAMESPACE."
+      fi
+
 
     fi
 
