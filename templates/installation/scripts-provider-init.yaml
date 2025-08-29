@@ -376,7 +376,7 @@ data:
                   --advertise-address $ADVERTISE_IP \
                   --node-ip $NODE_IP \
                   --service-cidr __SERVICE_CIDR__ \
-                  --flannel-backend=wireguard-native \
+                  --flannel-backend=vxlan \
                   --disable-network-policy \
                   --disable=traefik \
                   --node-label skycluster.io/node-type=control-plane \
@@ -384,7 +384,8 @@ data:
                   --node-label skycluster.io/provider-region=__REGION__ \
                   --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
                   --node-label topology.kubernetes.io/region=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
-                  --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ " sh -; then
+                  --node-label topology.kubernetes.io/zone=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \
+                  --node-label submariner.io/gateway=true" sh -; then
                 install_success=true
                 break
               else
