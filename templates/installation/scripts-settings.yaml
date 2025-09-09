@@ -305,7 +305,7 @@ data:
     # Parse cluster list, we generate cacerts for all secrets available, 
     # TODO: make sure the list is filtered based on user input
     mapfile -t CLUSTER_LIST < <(
-      jq -r '.items[] | "\(.metadata.name)\t\(.metadata.labels["skycluster.io/cluster-name"] // "")"' <<< "${all_kcfg_json}" \
+      jq -r '.items[] | "\(.metadata.name)\t\(.metadata.labels["skycluster.io/cluster-name"])\t\(.metadata.labels["skycluster.io/provider-platform"] // "")"' <<< "${all_kcfg_json}" \
         | sed '/^\s*$/d' \
         | sort -u
     )
@@ -314,18 +314,41 @@ data:
     reused_cacerts=()
     patched_remote=()
 
+    get_domain() {
+      case "$1" in
+        gcp) echo "gcp.skycluster.io" ;;
+        aws) echo "aws.skycluster.io" ;;
+        openstack) echo "os.skycluster.io" ;;
+        *) echo "Unknown provider" ;;
+      esac
+    }
+
     tmpdir="$(mktemp -d)"
     KUBECFG_PATH="${tmpdir}/kubeconfig.yaml"
 
     for ENTRY in "${CLUSTER_LIST[@]:-}"; do
       C=$(awk -F'\t' '{print $1}' <<< "$ENTRY")
       CLUSTER_NAME=$(awk -F'\t' '{print $2}' <<< "$ENTRY")
-      echo "---- Cluster: ${C} and cluster name: ${CLUSTER_NAME}"
+      PLATFORM=$(awk -F'\t' '{print $3}' <<< "$ENTRY")
+      echo "---- Cluster: ${C} and cluster name: ${CLUSTER_NAME} and provider platform: ${PLATFORM}"
 
       # Extract kubeconfig to temp
       tmpdir="$(mktemp -d)"
-      kubectl -n "${NAMESPACE}" get secret "${C}" -o json \
-        | jq -r '.data.kubeconfig' | base64 -d > "${KUBECFG_PATH}"
+      secretData=$(kubectl -n "${NAMESPACE}" get secret "${C}" -o json)
+      echo "$secretData" | jq -r '.data.kubeconfig' | base64 -d > "${KUBECFG_PATH}"
+
+      # if platform is gcp export GOOGLE_APPLICATION_CREDENTIALS
+      if [[ "${PLATFORM}" == "gcp" ]]; then
+        gcp_key_b64=$(echo "$secretData" | jq -r '.data["privateKey"] // empty')
+        if [[ -n "$gcp_key_b64" ]]; then
+          gcp_key_path="${tmpdir}/gcp-service-account.json"
+          echo "$gcp_key_b64" | base64 -d > "$gcp_key_path"
+          export GOOGLE_APPLICATION_CREDENTIALS="$gcp_key_path"
+          echo "---- Set GOOGLE_APPLICATION_CREDENTIALS for GCP cluster ${C}"
+        else
+          echo "---- WARNING: GCP cluster ${C} missing gcp-service-account.json in secret; skipping setting GOOGLE_APPLICATION_CREDENTIALS"
+        fi
+      fi
 
       CACERTS_SECRET="${C}-cacerts"
       C_DNSSAFE="${CLUSTER_NAME//./-}"
@@ -335,6 +358,10 @@ data:
         pushd "${ISTIO_DIR}/tools" >/dev/null
         make -f ./certs/Makefile.selfsigned.mk "${C}-cacerts"
         popd >/dev/null
+        
+        API_VERSION=$(get_domain "${PLATFORM}") 
+        OBJ_UID=$(kubectl get "xkubes.${API_VERSION}" "${CLUSTER_NAME}" -o jsonpath='{.metadata.uid}')
+        
         kubectl -n "${NAMESPACE}" create secret generic "${CACERTS_SECRET}" \
           --from-file=ca-cert.pem="${ISTIO_DIR}/tools/${C}/ca-cert.pem" \
           --from-file=ca-key.pem="${ISTIO_DIR}/tools/${C}/ca-key.pem" \
@@ -346,7 +373,19 @@ data:
             "skycluster.io/secret-type=cluster-cacert" \
             "skycluster.io/cluster-name=${C_DNSSAFE}" \
             --dry-run=client -o yaml \
+        | kubectl patch --local -f - -p "$(cat <<EOF
+    metadata:
+      ownerReferences:
+      - apiVersion: $API_VERSION/v1alpha1
+        kind: XKube
+        name: ${CLUSTER_NAME}
+        uid: ${OBJ_UID}
+        controller: true
+        blockOwnerDeletion: true
+    EOF
+        )" --type=merge -o yaml \
         | kubectl -n "${NAMESPACE}" apply -f -
+
         created_cacerts+=("$C")
       else
         echo "---- Found ${CACERTS_SECRET}; reuse."
@@ -530,34 +569,44 @@ data:
     KUBECFG_PATH="${tmpdir}/kubeconfig.yaml"
 
     echo "---- List kubeconfig secrets clients"
-    all_kcfg_json="$(kubectl -n "${NAMESPACE}" get secret -l "skycluster.io/cluster-name=${CLUSTER_NAME}" -o json)"
+    all_kcfg_json="$(kubectl -n "${NAMESPACE}" get secret -l "skycluster.io/secret-type=k8s-connection-data,skycluster.io/cluster-name=${CLUSTER_NAME}" -o json)"
 
     # Parse cluster list, we generate cacerts for all secrets available, 
     # TODO: make sure the list is filtered based on user input
     mapfile -t CLUSTER_LIST < <(
-      jq -r '.items[] | "\(.metadata.name)\t\(.metadata.labels["skycluster.io/cluster-name"] // "")"' <<< "${all_kcfg_json}" \
+      jq -r '.items[] | "\(.metadata.name)\t\(.metadata.labels["skycluster.io/cluster-name"])\t\(.metadata.labels["skycluster.io/provider-platform"] // "")"' <<< "${all_kcfg_json}" \
         | sed '/^\s*$/d' \
         | sort -u
     )
 
     for ENTRY in "${CLUSTER_LIST[@]:-}"; do
       C=$(awk -F'\t' '{print $1}' <<< "$ENTRY")
-      echo "---- Cluster: ${C} and cluster name: ${CLUSTER_NAME}"
+      PLATFORM=$(awk -F'\t' '{print $3}' <<< "$ENTRY")
+      echo "---- Cluster: ${C} and cluster name: ${CLUSTER_NAME} and provider platform: ${PLATFORM}"
    
       # Extract kubeconfig to temp
-      kubeconfig_data=$(kubectl -n "${NAMESPACE}" get secret "${C}" -o json \
-        | jq -r '.data.kubeconfig // empty')
+      secretData=$(kubectl -n "${NAMESPACE}" get secret "${C}" -o json)
+      echo "$secretData" | jq -r '.data.kubeconfig' | base64 -d > "${KUBECFG_PATH}"
 
-      if [[ -z "$kubeconfig_data" ]]; then
-          echo "Secret ${C} has no kubeconfig. Skipping..."
-          continue
+      # if platform is gcp export GOOGLE_APPLICATION_CREDENTIALS
+      if [[ "${PLATFORM}" == "gcp" ]]; then
+        gcp_key_b64=$(echo "$secretData" | jq -r '.data["privateKey"] // empty')
+        if [[ -n "$gcp_key_b64" ]]; then
+          gcp_key_path="${tmpdir}/gcp-service-account.json"
+          echo "$gcp_key_b64" | base64 -d > "$gcp_key_path"
+          export GOOGLE_APPLICATION_CREDENTIALS="$gcp_key_path"
+          echo "---- Set GOOGLE_APPLICATION_CREDENTIALS for GCP cluster ${C}"
+
+          gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          USER=$(kubectl config view --kubeconfig $KUBECFG_PATH -o jsonpath='{.users[0].name}')
+          kubectl config set-credentials "$USER" \
+            --token="$ACCESS_TOKEN" \
+            --kubeconfig $KUBECFG_PATH
+        else
+          echo "---- WARNING: GCP cluster ${C} missing gcp-service-account.json in secret; skipping setting GOOGLE_APPLICATION_CREDENTIALS"
+        fi
       fi
-
-      # Decode and save kubeconfig
-      echo "$kubeconfig_data" | base64 -d > "${KUBECFG_PATH}" || {
-          echo "Failed to decode kubeconfig for ${C}. Skipping..."
-          continue
-      }
     
       CACERTS_SECRET="${C}-cacerts"
       C_DNSSAFE="${CLUSTER_NAME//./-}"
@@ -593,5 +642,7 @@ data:
 
     echo "SUCCESS: ${patched_remote[*]-}"
     exit 0
+
+
 ---
 {{ end }}
