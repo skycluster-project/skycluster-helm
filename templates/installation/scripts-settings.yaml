@@ -643,6 +643,31 @@ data:
     echo "SUCCESS: ${patched_remote[*]-}"
     exit 0
 
+  aws-src-dst-check.sh: |
+    #!/bin/sh
+    set -e
 
+    NODE_NAME=${NODE_NAME:?Environment variable NODE_NAME must be set}
+    AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:?Environment variable AWS_DEFAULT_REGION must be set}
+
+    echo "Ensuring source/destination check disabled on node $NODE_NAME"
+    
+    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+    echo "Instance ID: $INSTANCE_ID"
+
+    ENI_IDS=$(aws ec2 describe-instances \
+      --instance-ids $INSTANCE_ID \
+      --query "Reservations[].Instances[].NetworkInterfaces[].NetworkInterfaceId" \
+      --output text)
+
+    for eni in $ENI_IDS; do
+      echo "Disabling source-dest-check on ENI: $eni"
+      aws ec2 modify-network-interface-attribute \
+        --network-interface-id $eni \
+        --no-source-dest-check || true
+    done
+
+    echo "Done. Sleeping to stay alive..."
+    sleep 3600
 ---
 {{ end }}
