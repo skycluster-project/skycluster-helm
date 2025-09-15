@@ -1,0 +1,93 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xsetups.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XSetup
+    plural: xsetups
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XSetup is the Schema for the XSetup API.
+        properties:
+          spec:
+            description: XSetupSpec defines the desired state of XSetup.
+            properties:
+              apiServer:
+                type: string
+              submariner:
+                properties:
+                  enabled:
+                    type: boolean
+                type: object
+            type: object
+          status:
+            description: XSetupStatus defines the observed state of XSetup.
+            properties:
+              apiServer:
+                type: string
+              ca:
+                properties:
+                  certificate:
+                    type: string
+                  secretName:
+                    type: string
+                  secretNamespace:
+                    type: string
+                type: object
+              headscale:
+                properties:
+                  connectionSecretName:
+                    type: string
+                  loginUrl:
+                    type: string
+                  token:
+                    type: string
+                type: object
+              istio:
+                properties:
+                  rootCASecretName:
+                    type: string
+                type: object
+              keypair:
+                properties:
+                  publicKey:
+                    type: string
+                  secretName:
+                    type: string
+                  secretNamespace:
+                    type: string
+                type: object
+              log:
+                type: string
+              namespace:
+                type: string
+              providerConfig:
+                properties:
+                  helm:
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                  kubernetes:
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                type: object
+              submariner:
+                properties:
+                  connectionSecretName:
+                    type: string
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

@@ -1,0 +1,256 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xoverlays.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: skycluster.io/v1alpha1
+    kind: XOverlay
+  mode: Pipeline
+  pipeline:
+    - step: extra-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            - apiVersion: v1
+              kind: Secret
+              into: Secrets
+              type: Selector
+              selector:
+                minMatch: 0
+                maxMatch: 200
+                matchLabels:
+                  - key: app.kubernetes.io/managed-by
+                    type: Value
+                    value: Helm
+            - kind: XSetup
+              into: XSetups
+              apiVersion: skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                minMatch: 1
+                maxMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+    - step: resources
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: basic
+        spec:
+          dependencies: |
+            k8s = "1.32.4"
+            provider-kubernetes = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+            provider-helm = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+            helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+          source: |-
+            import base64
+            import json
+            import crypto
+            import yaml
+            import provider_kubernetes.v1alpha2 as k8sv1alpha2
+            import provider_helm.v1beta1 as helmv1beta1
+            import helper.v1alpha1.main as helper
+
+            oxr = option("params").oxr # observed composite resource
+            ocds = option("params")?.ocds # observed composed resources
+            # _dxr = option("params").dxr # desired composite resource
+            # dcds = option("params").dcds # desired composed resources
+
+            # assert oxr.metadata?.labels is not Undefined, "At least one label must be specified"
+            # assert "skycluster.io/managed-by" in oxr.metadata.labels, "Label 'skycluster.io/managed-by' must be specified"
+
+            ctx = option("params")?.ctx
+            assert ctx is not Undefined, "Context must be provided in the params"
+
+            _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
+            assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+            _secrets = _extraRes["Secrets"] or Undefined
+            assert _secrets is not Undefined, "Secrets resource must be provided in the extra resources"
+
+            # For Submariner
+            _brokerSecrets = [sc for sc in _secrets if "submariner-k8s-broker-client" in sc.metadata.name] or []
+            assert len(_brokerSecrets) == 1, "Exactly one broker secret must be provided in the extra resources"
+            _brokerSecret = _brokerSecrets[0]
+
+            _brokerCA = _brokerSecret.data?["ca.crt"] or Undefined
+            assert _brokerCA is not Undefined, "Broker CA certificate must be provided in the broker secret"
+            _brokerToken = _brokerSecret.data?["token"] or Undefined
+            assert _brokerToken is not Undefined, "Broker token must be provided in the broker secret"
+
+            # Generate a random PSK (Pre-Shared Key) for the broker 64 characters long
+            _ocdsPskDecoded = ocds?["submarinerSecretObj"]?.Resource?.status?.atProvider?.manifest?.data?["values.yaml"]
+            _ocdsPsk = json.decode(base64.decode(_ocdsPskDecoded))?.ipsec?.psk if _ocdsPskDecoded else Undefined
+            _psk = _ocdsPsk if _ocdsPsk else crypto.uuid().replace("-", "") + crypto.uuid().replace("-", "")[:32]
+
+            # _brokerPrivateIp = _brokerEndpoint.endpoints?[0]?.addresses?[0] or Undefined
+            # assert _brokerPrivateIp is not Undefined, "Broker private IP must be provided in the broker endpoint"
+
+
+            _xsetup = _extraRes["XSetups"]?[0] or Undefined
+            assert _xsetup is not Undefined, "XSetup resource must be provided in the extra resources"
+
+            _apiServer = _xsetup.status?.apiServer or Undefined
+            assert _apiServer is not Undefined, "Broker public IP and port must be provided"
+            _ns = "skycluster-system"
+
+            _k8sProvCfgName = _xsetup.status?.providerConfig?.kubernetes?.name or Undefined
+            _helmProvCfgName = _xsetup.status?.providerConfig?.helm?.name or Undefined
+
+            _items = []
+
+            # We need to get data from cluster to determind the cluster and service CIDRs
+            _items += [
+              k8sv1alpha2.Object{
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    "skycluster.io/managed-by": "skycluster",
+                  },
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("clusterServiceCidrObj")
+                  }
+                }
+                spec = {
+                  forProvider.manifest = {
+                    apiVersion = "v1"
+                    kind = "ConfigMap"
+                    metadata = { 
+                      name = "kubeadm-config",
+                      namespace = "kube-system",
+                    }
+                  }
+                  managementPolicies = ["Observe"]
+                  providerConfigRef = {
+                    name = _k8sProvCfgName
+                  }
+                }
+              }
+            ] if _k8sProvCfgName or ocds?["clusterServiceCidrObj"] else []
+
+            _clusterCidrYaml = ocds?["clusterServiceCidrObj"]?.Resource?.status?.atProvider?.manifest?.data?["ClusterConfiguration"] or Undefined
+            _clusterCidr = yaml.decode(_clusterCidrYaml)?["networking"]?["podSubnet"] if _clusterCidrYaml else Undefined
+            _serviceCidr = yaml.decode(_clusterCidrYaml)?["networking"]?["serviceSubnet"] if _clusterCidrYaml else Undefined
+
+            # Create a secret for Submariner connection
+            _items += [
+              k8sv1alpha2.Object{
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    "skycluster.io/managed-by": "skycluster",
+                  },
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("submarinerSecretObj"),
+                  }
+                }
+                spec = {
+                  forProvider.manifest = {
+                    apiVersion = "v1"
+                    kind = "Secret"
+                    metadata = { 
+                      name = "submariner-connection-secret",
+                      namespace = _ns,
+                      labels = {
+                        **oxr.metadata?.labels,
+                        "skycluster.io/managed-by": "skycluster",
+                        "skycluster.io/config-type": "connection-secret"
+                      },
+                      annotations = {
+                        **oxr.metadata?.annotations,
+                      }
+                    }
+                    type: "Opaque"
+                    stringData = {
+                      "values.yaml" = json.encode({
+                        "ipsec": {
+                          "psk": _psk
+                        },
+                        "broker": {
+                          "server": _apiServer,
+                          "namespace": _ns,
+                          "ca" : _brokerCA, 
+                          "token": base64.decode(_brokerToken),
+                        }
+                      })
+                    }
+                  }
+                  providerConfigRef = {
+                    name = _k8sProvCfgName
+                  }
+                }
+              }
+            ] if (_clusterCidr and _serviceCidr) or ocds?["submarinerSecretObj"] else []
+
+            _submarinerSecretName = ocds?["submarinerSecretObj"]?.Resource?.status?.atProvider?.manifest?.metadata?.name or Undefined
+
+            # submarinerClientCluster
+            _items += [
+              helmv1beta1.Release{
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    "skycluster.io/managed-by": "skycluster",
+                  },
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("submarinerClientCluster")
+                  }
+                }
+                spec = {
+                  forProvider = {
+                    chart = {
+                      name = "submariner-operator"
+                      repository = "https://submariner-io.github.io/submariner-charts/charts"
+                      version = "0.20.1"
+                    }
+                    namespace = "submariner-operator"
+                    skipCreateNamespace = True
+                    valuesFrom = [{
+                        secretKeyRef = {
+                          key = "values.yaml"
+                          name = _submarinerSecretName if _submarinerSecretName else "submariner-connection-secret"
+                          namespace = _ns if _ns else "skycluster-system"
+                        }
+                    }]
+                    values = {
+                      submariner = {
+                        serviceDiscovery = "false",
+                        cableDriver = "wireguard",
+                        clusterId = "broker-skycluster",
+                        clusterCidr = _clusterCidr,
+                        serviceCidr = _serviceCidr,
+                        natEnabled = "true"
+                      }
+                    }
+                  }
+                  providerConfigRef = {
+                    name = _helmProvCfgName
+                  }
+                }
+              }
+            ] if helper._ready(ocds?["submarinerSecretObj"]) or ocds?["submarinerClientCluster"] else []
+
+
+            dxr = [{
+              **option("params").dxr 
+              status.connectionSecretName = _submarinerSecretName if _submarinerSecretName else Undefined
+              status.namespace = _ns if _ns else Undefined
+            }] 
+
+            items = _items + dxr
+
+    - step: function-auto-ready
+      functionRef:
+        name: function-auto-ready

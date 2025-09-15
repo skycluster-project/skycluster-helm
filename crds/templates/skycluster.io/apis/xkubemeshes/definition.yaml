@@ -1,0 +1,54 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xkubemeshes.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XKubeMesh
+    plural: xkubemeshes
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XKubeMesh is the Schema for the XKubeMesh API.
+        properties:
+          spec:
+            description: XKubeMeshSpec defines the desired state of XKubeMesh.
+            properties:
+              clusterNames:
+                items:
+                  type: string
+                type: array
+              localCluster:
+                properties:
+                  podCidr:
+                    type: string
+                  serviceCidr:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: XKubeMeshStatus defines the observed state of XKubeMesh.
+            properties:
+              clusters:
+                items:
+                  properties:
+                    nameRef:
+                      type: string
+                    providerConfigName:
+                      type: string
+                    secretName:
+                      type: string
+                  type: object
+                type: array
+              log:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

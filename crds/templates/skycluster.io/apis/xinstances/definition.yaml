@@ -1,0 +1,120 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xinstances.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XInstance
+    plural: xinstances
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XInstance is the Schema for the XInstance API.
+        properties:
+          spec:
+            description: XInstanceSpec defines the desired state of XInstance.
+            properties:
+              applicationId:
+                type: string
+              flavor:
+                type: string
+              image:
+                type: string
+              ipForwarding:
+                type: boolean
+              providerRef:
+                properties:
+                  platform:
+                    type: string
+                  region:
+                    type: string
+                  zone:
+                    type: string
+                type: object
+              publicIp:
+                type: boolean
+              publicKey:
+                type: string
+              rootVolumes:
+                items:
+                  properties:
+                    size:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              securityGroups:
+                properties:
+                  tcpPorts:
+                    items:
+                      properties:
+                        fromPort:
+                          type: number
+                        protocol:
+                          type: string
+                        toPort:
+                          type: number
+                      type: object
+                    type: array
+                  udpPorts:
+                    items:
+                      properties:
+                        fromPort:
+                          type: number
+                        protocol:
+                          type: string
+                        toPort:
+                          type: number
+                      type: object
+                    type: array
+                type: object
+              subnets:
+                items:
+                  properties:
+                    id:
+                      type: string
+                    networkId:
+                      type: string
+                  type: object
+                type: array
+              userData:
+                type: string
+            type: object
+          status:
+            description: XInstanceStatus defines the observed state of XInstance.
+            properties:
+              keypair:
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                type: object
+              log:
+                type: string
+              network:
+                properties:
+                  privateIp:
+                    type: string
+                  publicIp:
+                    type: string
+                type: object
+              providerConfig:
+                properties:
+                  kubernetes:
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

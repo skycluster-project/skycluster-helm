@@ -1,0 +1,19 @@
+# {{ if .Values.install }}
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: provider-latencies-1
+#   namespace: {{ .Release.Namespace }}
+#   labels:
+#     skycluster.io/managed-by: skycluster
+#     skycluster.io/config-type: provider-latencies
+# data:
+#   {{- range $v := $.Values.providerLatencies.custom }}
+#     {{- range $v1 := $v.destinations }}
+#       {{- range $k2, $v2 := $v1 }}
+#   {{ printf "%s.%v" $v.source $k2 }}: {{ $v2 | quote }}
+#       {{- end }}
+#     {{- end }}
+#   {{- end }}
+# {{- end }}
+  

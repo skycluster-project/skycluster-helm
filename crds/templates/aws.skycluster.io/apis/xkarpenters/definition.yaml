@@ -1,0 +1,28 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xkarpenters.aws.skycluster.io
+spec:
+  group: aws.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XKarpenter
+    plural: xkarpenters
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XKarpenter is the Schema for the XKarpenter API.
+        properties:
+          spec:
+            description: XKarpenterSpec defines the desired state of XKarpenter.
+            type: object
+          status:
+            description: XKarpenterStatus defines the observed state of XKarpenter.
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

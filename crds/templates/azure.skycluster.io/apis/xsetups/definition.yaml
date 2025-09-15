@@ -1,0 +1,28 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xsetups.azure.skycluster.io
+spec:
+  group: azure.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XSetup
+    plural: xsetups
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XSetup is the Schema for the XSetup API.
+        properties:
+          spec:
+            description: XSetupSpec defines the desired state of XSetup.
+            type: object
+          status:
+            description: XSetupStatus defines the observed state of XSetup.
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

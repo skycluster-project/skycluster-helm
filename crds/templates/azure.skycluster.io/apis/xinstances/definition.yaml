@@ -1,0 +1,28 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xinstances.azure.skycluster.io
+spec:
+  group: azure.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XInstance
+    plural: xinstances
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XInstance is the Schema for the XInstance API.
+        properties:
+          spec:
+            description: XInstanceSpec defines the desired state of XInstance.
+            type: object
+          status:
+            description: XInstanceStatus defines the observed state of XInstance.
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

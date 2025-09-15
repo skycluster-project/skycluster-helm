@@ -1,0 +1,13 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkubes.azure.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: azure.skycluster.io/v1alpha1
+    kind: XKube
+  mode: Pipeline
+  pipeline:
+  - functionRef:
+      name: crossplane-contrib-function-auto-ready
+    step: crossplane-contrib-function-auto-ready

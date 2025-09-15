@@ -1,0 +1,103 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xproviders.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XProvider
+    plural: xproviders
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XProvider is the Schema for the XProvider API.
+        properties:
+          spec:
+            description: XProviderSpec defines the desired state of XProvider.
+            properties:
+              applicationId:
+                type: string
+              externalNetwork:
+                properties:
+                  networkId:
+                    type: string
+                  networkName:
+                    type: string
+                  subnetId:
+                    type: string
+                  subnetName:
+                    type: string
+                type: object
+              gateway:
+                properties:
+                  flavor:
+                    type: string
+                  volumeSize:
+                    type: number
+                  volumeType:
+                    type: string
+                type: object
+              providerRef:
+                properties:
+                  platform:
+                    type: string
+                  region:
+                    type: string
+                  zones:
+                    properties:
+                      primary:
+                        type: string
+                      secondary:
+                        type: string
+                    type: object
+                type: object
+              subnets:
+                items:
+                  properties:
+                    cidr:
+                      type: string
+                    default:
+                      type: boolean
+                    type:
+                      type: string
+                    zone:
+                      type: string
+                  type: object
+                type: array
+              vpcCidr:
+                type: string
+            type: object
+          status:
+            description: XProviderStatus defines the observed state of XProvider.
+            properties:
+              gateway:
+                properties:
+                  privateIp:
+                    type: string
+                  publicIp:
+                    type: string
+                type: object
+              log:
+                type: string
+              subnets:
+                items:
+                  properties:
+                    cidr:
+                      type: string
+                    type:
+                      type: string
+                    zone:
+                      type: string
+                  type: object
+                type: array
+              vpcCidr:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

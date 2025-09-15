@@ -1,0 +1,336 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkubes.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: skycluster.io/v1alpha1
+    kind: XKube
+  mode: Pipeline
+  pipeline:
+    - step: extra-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            - kind: XSetup
+              into: SkySetups
+              apiVersion: skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                minMatch: 1
+                maxMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+            - kind: ConfigMap
+              into: ProviderSettings
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.platform
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
+            - kind: ConfigMap
+              into: InitScripts
+              apiVersion: v1
+              type: Selector
+              selector:
+                minMatch: 1
+                maxMatch: 100
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/script-type
+                    type: Value
+                    value: cloud-init
+    - step: resources
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: basic
+        spec:
+          dependencies: |
+            helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+          source: |-
+            import json
+            import helper.v1alpha1.main as helper
+
+            oxr = option("params").oxr # observed composite resource
+            ocds = option("params")?.ocds # observed composed resources
+            # _dxr = option("params").dxr # desired composite resource
+            # dcds = option("params").dcds # desired composed resources
+
+            ctx = option("params")?.ctx
+            assert ctx is not Undefined, "Context must be provided in the params"
+
+            _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
+            assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            _provSettings = _extraRes["ProviderSettings"]?[0] 
+            assert _provSettings is not Undefined, "Provider settings must be provided in the extra resources"
+
+            _skySetup = _extraRes["SkySetups"][0]
+            assert _skySetup is not Undefined, "SkySetup must be provided in the extra resources"
+
+            _oxrProvPlatform = oxr.spec?.providerRef?.platform or Undefined
+            _oxrProvRegion = oxr.spec?.providerRef?.region or Undefined
+            _oxrProvZones = oxr.spec?.providerRef?.zones or Undefined
+            _oxrProvZone = oxr.spec?.providerRef?.zones?.primary or Undefined
+
+            _ami = helper._get_image(_provSettings, oxr.spec?.image or "ubuntu-24.04", _oxrProvZone)?.name
+            _it = helper._get_instance_type(_provSettings, oxr.spec?.flavor or "2vCPU-4GB", _oxrProvZone)?[0]
+
+            assert _oxrProvPlatform and _oxrProvRegion and _oxrProvZone, \
+              "Provider platform, region, and primary zone and must be specified in the providerRef"
+
+            # If it is OpenStack or baremetal, then the control plane must be provided.
+            assert oxr.spec?.controlPlane or _oxrProvPlatform.lower() in ["aws", "gcp", "azure"], \
+              "Control plane is required for unmanaged clusters (e.g. OpenStack)"
+
+            _svcCidr = oxr.spec?.serviceCidr or Undefined
+            _nodesTypes = oxr.spec?.nodeTypes or Undefined
+            _principal = oxr.spec?.principal or Undefined
+
+
+            _a = [helper._get_instance_type(_provSettings, _it or "2vCPU-4GB", _oxrProvZone) for _it in _nodesTypes] if _nodesTypes else []
+            # convert lists in _a into a single list
+            _nodeTypes = [item for sublist in _a for item in sublist]
+
+            _items = []
+
+            _items += [{
+              apiVersion = "aws.skycluster.io/v1alpha1"
+              kind = "XKube"
+              metadata = {
+                labels = {
+                  **oxr.metadata?.labels,
+                  **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
+                }
+                annotations = {
+                  **oxr.metadata?.annotations,
+                  **helper._set_resource_name("xk8s")
+                }
+              }
+              spec = {
+                applicationId = oxr.spec?.applicationId or Undefined
+                serviceCidr = oxr.spec.serviceCidr or Undefined
+                podCidr = {
+                  cidr = oxr.spec.podCidr.cidr or Undefined
+                  public = oxr.spec.podCidr.public or Undefined
+                  private = oxr.spec.podCidr.private or Undefined
+                }
+                principalArn = oxr.spec?.principal?.id or Undefined
+                nodeGroups = [
+                  *[{
+                    nodeCount = n.nodeCount or 1
+                    instanceType = helper._get_instance_type(_provSettings, n.instanceType or "2vCPU-4GB", _oxrProvZone)
+                    publicAccess = n.publicAccess
+                    if n.autoScaling:
+                      autoScaling = {
+                        enabled = n.autoScaling?.enabled
+                        minSize = n.autoScaling?.minSize
+                        maxSize = n.autoScaling?.maxSize
+                      }
+                    } for n in _nodeGroups
+                  ]
+                ]
+                providerRef = {
+                  platform = _oxrProvPlatform
+                  region = _oxrProvRegion
+                  zones = _oxrProvZones
+                }
+                # writeConnectionSecretToRef = {
+                #   name = "k8s-eks-{}".format(oxr.metadata.name)
+                #   namespace = "skycluster-system"
+                # }
+              }
+            }] if _oxrProvPlatform == "aws" else []
+
+            _items += [{
+              apiVersion = "gcp.skycluster.io/v1alpha1"
+              kind = "XKube"
+              metadata = {
+                labels = {
+                  **oxr.metadata?.labels,
+                  **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
+                }
+                annotations = {
+                  **oxr.metadata?.annotations,
+                  **helper._set_resource_name("xk8s")
+                }
+              }
+              spec = {
+                applicationId = oxr.spec?.applicationId or Undefined
+                nodeCidr = oxr.spec?.nodeCidr or Undefined
+                podCidr = oxr.spec?.podCidr or Undefined
+
+                nodeGroups = [
+                  *[{
+                    nodeCount = n.nodeCount or 1
+                    type = n.type or "user-defined"
+                    instanceType = helper._get_instance_type(_provSettings, n.instanceType or "2vCPU-4GB", _oxrProvZone)?[0]
+                    publicAccess = n.publicAccess
+                    if n.autoScaling:
+                      autoScaling = {
+                        enabled = n.autoScaling?.enabled
+                        minSize = n.autoScaling?.minSize
+                        maxSize = n.autoScaling?.maxSize
+                      }
+                    } for n in _nodeGroups
+                  ]
+                ]  
+                # nodeGroups = [
+                #   {
+                #     nodeCount = 1
+                #     instanceType = _nodeTypes?[0] # For GCP we use single instance type
+                #     publicAccess = True
+                #     autoScaling = {
+                #       enabled = True
+                #       minSize = 1
+                #       maxSize = 1
+                #     }
+                #   },
+                #   # {
+                #   #   nodeCount = 1
+                #   #   instanceType = _nodesTypes 
+                #   #   publicAccess = False
+                #   #   autoScaling = {
+                #   #     enabled = True
+                #   #     minSize = 1
+                #   #     maxSize = 3
+                #   #   }
+                #   # } if _nodesTypes else {}
+                # ]
+                providerRef = {
+                  platform = _oxrProvPlatform
+                  region = _oxrProvRegion
+                  zones = _oxrProvZones
+                }
+              }
+            }] if _oxrProvPlatform == "gcp" else []
+
+
+            _nodeGroups = [n for n in oxr.spec?.nodeGroups if n]
+
+            _items += [{
+              apiVersion = "os.skycluster.io/v1alpha1"
+              kind = "XKube"
+              metadata = {
+                labels = {
+                  **oxr.metadata?.labels,
+                  **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
+                }
+                annotations = {
+                  **oxr.metadata?.annotations,
+                  **helper._set_resource_name("xk8s")
+                }
+              }
+              spec = {
+                applicationId = oxr.spec?.applicationId or Undefined
+                serviceCidr = oxr.spec?.serviceCidr or Undefined
+                podCidr = oxr.spec?.podCidr?.cidr or Undefined
+
+                nodeGroups = [
+                  # First node group is for controller node
+                  if oxr.spec?.controlPlane:
+                    {
+                      nodeCount = 1
+                      role = "control-plane"
+                      instanceType = helper._get_instance_type(_provSettings, oxr.spec?.controlPlane?.instanceType or "4vCPU-16GB", _oxrProvZone)?[0]
+                      publicAccess = True
+                      # highAvailability = oxr.spec?.controlPlane?.highAvailability
+                      if oxr.spec?.controlPlane?.autoScaling:
+                        autoScaling = {
+                          enabled = oxr.spec?.controlPlane?.autoScaling?.enabled
+                          minSize = oxr.spec?.controlPlane?.autoScaling?.minSize
+                          maxSize = oxr.spec?.controlPlane?.autoScaling?.maxSize
+                        }
+                    }, 
+                  # Rest of node groups (at least there must be one with public access)
+                  *[{
+                    nodeCount = n.nodeCount or 1
+                    role = "worker"
+                    instanceType = helper._get_instance_type(_provSettings, oxr.spec?.controlPlane?.instanceType or "2vCPU-4GB", _oxrProvZone)?[0]
+                    # instanceType = n.instanceType
+                    publicAccess = n.publicAccess
+                    if n.autoScaling:
+                      autoScaling = {
+                        enabled = n.autoScaling?.enabled
+                        minSize = n.autoScaling?.minSize
+                        maxSize = n.autoScaling?.maxSize
+                      }
+                    } for n in _nodeGroups
+                  ]
+                ]
+
+                providerRef = {
+                  platform = _oxrProvPlatform
+                  region = _oxrProvRegion
+                  zones = _oxrProvZones
+                }
+              }
+            }] if _oxrProvPlatform == "openstack" else []
+
+
+            if _oxrProvPlatform == "openstack":
+              _agents = ocds?["xk8s"]?.Resource?.status?.agents
+
+            _controllers = ocds?["xk8s"]?.Resource?.status?.controllers
+            _clusterSecretName = ocds?["xk8s"]?.Resource?.status?.clusterSecretName
+
+            # ###################### dxr ######################
+
+            dxr = {
+              **option("params").dxr,
+              status = {
+                clusterName = ocds?["xk8s"]?.Resource?.metadata?.name or Undefined
+                externalClusterName = ocds?["xk8s"]?.Resource?.status?.externalClusterName or Undefined
+                if _controllers:
+                  controllers = [{
+                      privateIp = s.privateIp or Undefined
+                      publicIp = s.publicIp or Undefined
+                      publicAccess = s.publicAccess or Undefined
+                    } for s in _controllers
+                  ]
+                if _agents:
+                  agents = [{
+                      privateIp = s.privateIp or Undefined
+                      publicIp = s.publicIp or Undefined
+                    } for s in _agents
+                  ]
+                if _clusterSecretName:
+                  clusterSecretName = _clusterSecretName
+                podCidr = ocds?["xk8s"]?.Resource?.status?.podCidr or Undefined
+                serviceCidr = ocds?["xk8s"]?.Resource?.status?.serviceCidr or Undefined
+                # log = json.encode({
+                #   controllers = [{
+                #       privateIp = s.privateIp or Undefined
+                #       publicIp = s.publicIp or Undefined
+                #     } for s in _controllers
+                #   ]
+                # })
+              }
+            }
+
+            items = [*_items, dxr]
+    - step: function-auto-ready
+      functionRef:
+        name: function-auto-ready

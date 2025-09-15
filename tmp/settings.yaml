@@ -1,43 +1,43 @@
-{{ if .Values.postInstall }}
-apiVersion: kubernetes.crossplane.io/v1alpha1
-kind: ProviderConfig
-metadata:
-  name: provider-kubernetes
-spec:
-  credentials:
-    source: InjectedIdentity
----
-apiVersion: helm.crossplane.io/v1alpha1
-kind: ProviderConfig
-metadata:
-  name: provider-helm
-spec:
-  credentials:
-    source: InjectedIdentity
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: skycluster-pv
-  namespace: {{ .Release.Namespace }}
-spec:
-  capacity:
-    storage: 1Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: /mnt/data
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: skycluster-pvc
-  namespace: {{ .Release.Namespace }}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
-{{ end }}
+# {{ if .Values.postInstall }}
+# apiVersion: kubernetes.crossplane.io/v1alpha1
+# kind: ProviderConfig
+# metadata:
+#   name: provider-kubernetes
+# spec:
+#   credentials:
+#     source: InjectedIdentity
+# ---
+# apiVersion: helm.crossplane.io/v1alpha1
+# kind: ProviderConfig
+# metadata:
+#   name: provider-helm
+# spec:
+#   credentials:
+#     source: InjectedIdentity
+# ---
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: skycluster-pv
+#   namespace: {{ .Release.Namespace }}
+# spec:
+#   capacity:
+#     storage: 1Gi
+#   accessModes:
+#     - ReadWriteOnce
+#   hostPath:
+#     path: /mnt/data
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: skycluster-pvc
+#   namespace: {{ .Release.Namespace }}
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 1Gi
+# ---
+# {{ end }}

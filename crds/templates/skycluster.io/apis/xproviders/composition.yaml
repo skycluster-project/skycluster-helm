@@ -1,0 +1,263 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xproviders.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: skycluster.io/v1alpha1
+    kind: XProvider
+  mode: Pipeline
+  pipeline:
+    - step: pull-extra-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            - kind: XSetup
+              into: SkySetups
+              apiVersion: skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+            - kind: ConfigMap
+              into: ProviderSettings
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.platform
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
+            - kind: ConfigMap
+              into: InitScripts
+              apiVersion: v1
+              type: Selector
+              selector:
+                minMatch: 1
+                maxMatch: 100
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/script-type
+                    type: Value
+                    value: cloud-init
+    - step: resources
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: basic
+        spec:
+          dependencies: |
+            helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+          source: |-
+            import helper.v1alpha1.main as helper
+
+
+            oxr = option("params").oxr # observed composite resource
+            ocds = option("params")?.ocds # observed composed resources
+            # _dxr = option("params").dxr # desired composite resource
+            # dcds = option("params").dcds # desired composed resources
+
+            ctx = option("params")?.ctx
+            assert ctx is not Undefined, "Context must be provided in the params"
+
+            _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
+            assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            _provSettings = _extraRes["ProviderSettings"]?[0] 
+            assert _provSettings is not Undefined, "Provider settings must be provided in the extra resources"
+
+            _skySetup = _extraRes["SkySetups"][0]
+            assert _skySetup is not Undefined, "SkySetup must be provided in the extra resources"
+
+            _initScripts = _extraRes["InitScripts"]
+            assert _initScripts is not Undefined, "Init scripts must be provided in the extra resources"
+
+            _oxrProvPlatform = oxr.spec?.providerRef?.platform or Undefined
+            _oxrProvRegion = oxr.spec?.providerRef?.region or Undefined
+            _oxrProvZone = oxr.spec?.providerRef?.zones?.primary or Undefined
+            _appId = oxr.spec?.applicationId or Undefined
+            assert _oxrProvPlatform and _oxrProvRegion and _oxrProvZone and _appId, \
+              "Provider platform, region, and primary zone and application ID must be specified in the providerRef"
+
+            _oxrVpcCidr = oxr.spec?.vpcCidr or Undefined
+            assert _oxrVpcCidr, "VPC CIDR must be specified in the oxr spec"
+
+            _oxrSubnets = oxr.spec?.subnets or Undefined
+            assert len(_oxrSubnets) > 0, "At least one subnet must be specified in the oxr spec"
+
+            _publicKey = _skySetup.status?.keypair?.publicKey or Undefined
+            assert _publicKey, "Public key must be specified in the SkySetup status"
+
+            _scripts = ["ca-certificate", "ip-forwarding", "networkd-dispatcher", "tailscale", "iptables-postrouting"]
+            _userData = helper._select_init_scripts(_initScripts, _scripts) or Undefined
+
+            # Replace the SkyCluster CA certificate
+            _ca = _skySetup.status?.ca.certificate
+            assert _ca, "SkySetup CA certificate must be specified in the status"
+            _userData = _userData.replace("__CA_CERTIFICATE_ENCODED__", _ca)
+
+            # Tailscale configuration
+            _loginUrl = _skySetup.status?.headscale?.loginUrl 
+            assert _loginUrl, "Headscale login URL must be specified in the SkySetup status"
+            _hsToken = _skySetup.status?.headscale?.token
+
+            _userData = _userData.replace("__OVERLAY_LOGIN_URL__", _loginUrl)
+            _userData = _userData.replace("__OVERLAY_TOKEN__", _hsToken)
+            _userData = _userData.replace("__OVERLAY_HOSTNAME__", oxr.metadata?.name)
+
+            _items = []
+
+            _items += [
+              {
+                apiVersion = "aws.skycluster.io/v1alpha1"
+                kind = "XSetup"
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  }
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("xsetup")
+                  }
+                }
+                spec = {
+                  vpcCidr = _oxrVpcCidr
+                  subnets = _oxrSubnets
+                  publicKey = _publicKey
+                  gateway = {
+                    userData = _userData
+                    image = helper._get_image(_provSettings, "ubuntu-24.04", _oxrProvZone)?.name or Undefined
+                    flavor = helper._get_instance_type(_provSettings, "2vCPU-4GB", _oxrProvZone)?[0] or Undefined
+                    volumeType = oxr.spec?.gateway?.volumeType or "gp2"
+                    volumeSize = oxr.spec?.gateway?.volumeSize or 20
+                  }
+                  providerRef={
+                    platform= _oxrProvPlatform
+                    region= _oxrProvRegion
+                    zones = {
+                      primary: _oxrProvZone
+                      secondary: oxr.spec?.providerRef?.zones?.secondary
+                    }
+                  }
+                }
+              }
+            ] if _oxrProvPlatform == "aws" else []
+
+            _items += [
+              {
+                apiVersion = "gcp.skycluster.io/v1alpha1"
+                kind = "XSetup"
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  }
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("xsetup")
+                  }
+                }
+                spec = {
+                  vpcCidr = _oxrVpcCidr
+                  subnets = _oxrSubnets
+                  publicKey = _publicKey
+                  gateway = {
+                    userData = _userData
+                    image = helper._get_image(_provSettings, "ubuntu-24.04", _oxrProvZone)?.name or Undefined
+                    flavor = helper._get_instance_type(_provSettings, "2vCPU-4GB", _oxrProvZone)?[0] or Undefined
+                    volumeType = oxr.spec?.gateway?.volumeType or "pd-standard"
+                    volumeSize = oxr.spec?.gateway?.volumeSize or 20
+                  }
+                  providerRef={
+                    platform= _oxrProvPlatform
+                    region= _oxrProvRegion
+                    zones = {
+                      primary: _oxrProvZone
+                      secondary: oxr.spec?.providerRef?.zones?.secondary
+                    }
+                  }
+                }
+              }
+            ] if _oxrProvPlatform == "gcp" else []
+
+
+            _items += [
+              {
+                apiVersion = "os.skycluster.io/v1alpha1"
+                kind = "XSetup"
+                metadata = {
+                  labels = {
+                    **oxr.metadata?.labels,
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  }
+                  annotations = {
+                    **oxr.metadata?.annotations,
+                    **helper._set_resource_name("xsetup")
+                  }
+                }
+                spec = {
+                  vpcCidr = _oxrVpcCidr
+                  subnets = _oxrSubnets
+                  publicKey = _publicKey
+                  gateway = {
+                    userData = _userData
+                    image = helper._get_image(_provSettings, "ubuntu-24.04", _oxrProvZone)?.name or Undefined
+                    flavor = helper._get_instance_type(_provSettings, "2vCPU-4GB", _oxrProvZone)?[0] or Undefined
+                    # volumeType = oxr.spec?.gateway?.volumeType or "pd-standard"
+                    # volumeSize = oxr.spec?.gateway?.volumeSize or 20
+                  }
+                  if oxr.spec?.externalNetwork:
+                    externalNetwork = oxr.spec?.externalNetwork
+                  providerRef={
+                    platform= _oxrProvPlatform
+                    region= _oxrProvRegion
+                    zones = {
+                      primary: _oxrProvZone
+                      # secondary: oxr.spec?.providerRef?.zones?.secondary
+                    }
+                  }
+                }
+              }
+            ] if _oxrProvPlatform == "openstack" else []
+
+            _publicIp = ocds?["xsetup"]?.Resource?.status?.gateway?.publicIp
+            _privateIp = ocds?["xsetup"]?.Resource?.status?.gateway?.privateIp
+            _vpcCidr = ocds?["xsetup"]?.Resource?.status?.vpc?.cidrBlock or Undefined
+
+            dxr = [{
+              **option("params").dxr,
+              status = {
+                gateway = {
+                  publicIp = _publicIp
+                  privateIp = _privateIp
+                } if _publicIp or _privateIp else Undefined
+                vpcCidr = _vpcCidr
+              }
+            }]
+
+            items = _items + dxr
+    - step: function-auto-ready
+      functionRef:
+        name: function-auto-ready

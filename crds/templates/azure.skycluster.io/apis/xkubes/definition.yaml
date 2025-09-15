@@ -1,0 +1,28 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xkubes.azure.skycluster.io
+spec:
+  group: azure.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XKube
+    plural: xkubes
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XKube is the Schema for the XKube API.
+        properties:
+          spec:
+            description: XKubeSpec defines the desired state of XKube.
+            type: object
+          status:
+            description: XKubeStatus defines the observed state of XKube.
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

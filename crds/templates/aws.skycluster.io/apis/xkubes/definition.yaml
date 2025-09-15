@@ -1,0 +1,107 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xkubes.aws.skycluster.io
+spec:
+  group: aws.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XKube
+    plural: xkubes
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XKube is the Schema for the XKube API.
+        properties:
+          spec:
+            description: XKubeSpec defines the desired state of XKube.
+            properties:
+              applicationId:
+                type: string
+              nodeGroups:
+                items:
+                  properties:
+                    autoScaling:
+                      properties:
+                        enabled:
+                          type: boolean
+                        maxSize:
+                          type: number
+                        minSize:
+                          type: number
+                      type: object
+                    instanceType:
+                      items:
+                        type: string
+                      type: array
+                    nodeCount:
+                      type: number
+                    publicAccess:
+                      type: boolean
+                  type: object
+                type: array
+              podCidr:
+                properties:
+                  cidr:
+                    type: string
+                  private:
+                    type: string
+                  public:
+                    type: string
+                type: object
+              principalArn:
+                type: string
+              providerRef:
+                properties:
+                  platform:
+                    type: string
+                  region:
+                    type: string
+                  zones:
+                    properties:
+                      primary:
+                        type: string
+                      secondary:
+                        type: string
+                    type: object
+                type: object
+              serviceCidr:
+                type: string
+            type: object
+          status:
+            description: XKubeStatus defines the observed state of XKube.
+            properties:
+              clusterSecretName:
+                type: string
+              controllers:
+                items:
+                  properties:
+                    privateIp:
+                      type: string
+                    publicIp:
+                      type: string
+                  type: object
+                type: array
+              externalClusterName:
+                type: string
+              log:
+                type: string
+              podCidr:
+                type: string
+              providerConfigs:
+                properties:
+                  helm:
+                    type: string
+                  k8s:
+                    type: string
+                type: object
+              serviceCidr:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

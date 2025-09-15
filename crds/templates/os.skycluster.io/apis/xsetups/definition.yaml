@@ -1,0 +1,152 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xsetups.os.skycluster.io
+spec:
+  group: os.skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XSetup
+    plural: xsetups
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XSetup is the Schema for the XSetup API.
+        properties:
+          spec:
+            description: XSetupSpec defines the desired state of XSetup.
+            properties:
+              externalNetwork:
+                properties:
+                  networkId:
+                    type: string
+                  networkName:
+                    type: string
+                  subnetId:
+                    type: string
+                  subnetName:
+                    type: string
+                type: object
+              gateway:
+                properties:
+                  flavor:
+                    type: string
+                  image:
+                    type: string
+                  userData:
+                    type: string
+                  volumeSize:
+                    type: number
+                  volumeType:
+                    type: string
+                type: object
+              providerRef:
+                properties:
+                  platform:
+                    type: string
+                  region:
+                    type: string
+                  zones:
+                    properties:
+                      primary:
+                        type: string
+                      secondary:
+                        type: string
+                    type: object
+                type: object
+              publicKey:
+                type: string
+              subnets:
+                items:
+                  properties:
+                    cidr:
+                      type: string
+                    default:
+                      type: boolean
+                    gatewayIp:
+                      type: string
+                    zone:
+                      type: string
+                  type: object
+                type: array
+              vpcCidr:
+                type: string
+            type: object
+          status:
+            description: XSetupStatus defines the observed state of XSetup.
+            properties:
+              externalNetwork:
+                properties:
+                  networkId:
+                    type: string
+                  networkName:
+                    type: string
+                  subnetId:
+                    type: string
+                  subnetName:
+                    type: string
+                type: object
+              gateway:
+                properties:
+                  privateIp:
+                    type: string
+                  publicIp:
+                    type: string
+                type: object
+              keypair:
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  publicKey:
+                    type: string
+                type: object
+              log:
+                type: string
+              router:
+                properties:
+                  externalNetworkId:
+                    type: string
+                  routerId:
+                    type: string
+                  routerName:
+                    type: string
+                type: object
+              securityGroup:
+                properties:
+                  id:
+                    type: string
+                type: object
+              subnets:
+                items:
+                  properties:
+                    cidrBlock:
+                      type: string
+                    gatewayIp:
+                      type: string
+                    id:
+                      type: string
+                    networkId:
+                      type: string
+                    networkName:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              vpc:
+                properties:
+                  cidrBlock:
+                    type: string
+                  id:
+                    type: string
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

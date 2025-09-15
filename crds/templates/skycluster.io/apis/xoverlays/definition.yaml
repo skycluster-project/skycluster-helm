@@ -1,0 +1,40 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xoverlays.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XOverlay
+    plural: xoverlays
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XOverlay is the Schema for the XOverlay API.
+        properties:
+          spec:
+            description: XOverlaySpec defines the desired state of XOverlay.
+            properties:
+              namespace:
+                type: string
+              publicIp:
+                type: string
+            type: object
+          status:
+            description: XOverlayStatus defines the observed state of XOverlay.
+            properties:
+              connectionSecretName:
+                type: string
+              log:
+                type: string
+              namespace:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
