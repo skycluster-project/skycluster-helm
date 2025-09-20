@@ -8,26 +8,115 @@ metadata:
     skycluster.io/managed-by: skycluster
     skycluster.io/config-type: bm-gw-setup
 data:
-  tailscale_ping_check_script.sh: |
+  env_prepare_static_prob_script.sh: |
     #!/bin/bash
     set -euo pipefail
 
-    log() {
-      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") - $*"
-    }
-    log "Starting ping check" >> /root/ping-check.log
+    PING_CHECK_PATH="/usr/local/bin/ping-check.sh"
+    NETWORKD_DISPATCHER_PATH="/etc/networkd-dispatcher/routable.d/50-tailscale"
+    CA_CERTIFICATES_PATH="/usr/local/bin/generate-ca-cert.sh"
+    ROUTING_IPTABLES_PATH="/usr/local/bin/iptables-postrouting.sh"
 
+    compliant=true    
+    declare -A details
+    if [[ ! -f "$PING_CHECK_PATH" ]]; then
+      compliant=false
+      details["ping_check_path"]="missing"
+    fi
+    if [[ ! -f "$NETWORKD_DISPATCHER_PATH" ]]; then
+      compliant=false
+      details["networkd_dispatcher_path"]="missing"
+    fi
+    if [[ ! -f "$CA_CERTIFICATES_PATH" ]]; then
+      compliant=false
+      details["ca_certificates_path"]="missing"
+    fi
+    if [[ ! -f "$ROUTING_IPTABLES_PATH" ]]; then
+      compliant=false
+      details["routing_iptables_path"]="missing"
+    fi
+    CRON_ENTRY_PING="* * * * * /usr/local/bin/ping-check.sh"
+    EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
+    if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY_PING"; then
+      compliant=false
+      details["cron_entry_ping"]="missing"
+    fi
+
+    # build JSON
+    checks="{"
+      for key in "${!details[@]}"; do
+          checks+="\"$key\":\"${details[$key]}\","
+      done
+    checks="${checks%,}}"
+
+    facts=$(jq -n \
+      --arg ping_check_path "$PING_CHECK_PATH" \
+      --arg networkd_dispatcher_path "$NETWORKD_DISPATCHER_PATH" \
+      --arg ca_certificates_path "$CA_CERTIFICATES_PATH" \
+      --arg routing_iptables_path "$ROUTING_IPTABLES_PATH" \
+      --argjson checks "$checks" \
+      '{ 
+        ping_check_path: $ping_check_path,
+        networkd_dispatcher_path: $networkd_dispatcher_path,
+        ca_certificates_path: $ca_certificates_path,
+        routing_iptables_path: $routing_iptables_path,
+        checks: $checks
+      }'
+    )
+
+    jq -n --argjson compliant "$compliant" --argjson facts "$facts" '{compliant: $compliant, facts: $facts}' 
+
+  # Script to prepare the environment for Tailscale gateway operation.
+  env_prepare_static_script.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    LOG_FILE="/root/env-prepare-static.log"
+    PING_CHECK_PATH="/usr/local/bin/ping-check.sh"
+    NETWORKD_DISPATCHER_PATH="/etc/networkd-dispatcher/routable.d/50-tailscale"
+    CA_CERTIFICATES_PATH="/usr/local/bin/generate-ca-cert.sh"
+    ROUTING_IPTABLES_PATH="/usr/local/bin/iptables-postrouting.sh"
+
+    create_script_file() {   
+      local SCRIPT_PATH="$1"   # first argument: output script path, content from stdin
+
+      echo "Creating $SCRIPT_PATH" >> "$LOG_FILE"
+      # Read stdin into the target file
+      cat > "$SCRIPT_PATH"
+
+      chmod 0755 "$SCRIPT_PATH"
+      echo "Created and made executable: $SCRIPT_PATH" >> "$LOG_FILE"
+    }
+    add_cron_entry() {
+      local CRON_ENTRY="$1"   # the cron line to add
+
+      # Capture existing crontab (ignore error if empty)
+      local EXISTING_CRON
+      EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
+
+      if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY"; then
+        echo "Adding cron entry: $CRON_ENTRY" >> "$LOG_FILE"
+        (echo "$EXISTING_CRON"; echo "$CRON_ENTRY") | crontab -
+      else
+        echo "Cron entry already present: $CRON_ENTRY" >> "$LOG_FILE"
+      fi
+    }
+
+    create_script_file "$PING_CHECK_PATH" <<'EOF'
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "Starting ping check" >> /root/ping-check.log
     ping_ip() {
       local ip="$1"
       nc -z -w2 "$ip" 22
       if [ $? -eq 0 ]; then
-        log "$ip is reachable =)"
+        echo "$ip is reachable =)" >> /root/ping-check.log
       else
         nc -z -w1 "$ip" 22
         if [ $? -ne 0 ]; then
-          log "-- $ip IS NOT REACHABLE."
+          echo "-- $ip IS NOT REACHABLE." >> /root/ping-check.log
         else
-          log "$ip is reachable =)"
+          echo "$ip is reachable =)" >> /root/ping-check.log
         fi
       fi
     }
@@ -35,11 +124,157 @@ data:
     for ii in `sudo tailscale status | awk '{print $2}' | tail -n +2`; do 
       IP=`sudo tailscale ip --4 $ii` && ping_ip $IP >> /root/ping-check.log; 
     done
-  
-  tailscale_run_script.sh: |
+    echo "Ping check completed" >> /root/ping-check.log
+    EOF
+
+    create_script_file $NETWORKD_DISPATCHER_PATH <<'EOF'
+    #!/bin/sh
+    INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
+    # echo "Configuring interface $INTF_NAME MTU" >> /root/50-tailscale.log
+    # ip link set dev "$INTF_NAME" mtu 1450
+    echo "Enabling Segmentation Offload" >> /root/50-tailscale.log
+    # check out
+    # https://tailscale.com/kb/1320/performance-best-practices#linux-optimizations-for-subnet-routers-and-exit-nodes
+    if systemctl is-enabled networkd-dispatcher &>/dev/null; then
+      echo "networkd-dispatcher is enabled." >> /root/50-tailscale.log
+      ethtool -K $INTF_NAME rx-udp-gro-forwarding on rx-gro-list off
+    else
+      echo "networkd-dispatcher is not enabled. Skipping." >> /root/50-tailscale.log
+    fi
+    EOF
+
+    create_script_file "$CA_CERTIFICATES_PATH" <<'EOF'
+    #!/bin/bash
+    echo "Generating CA certificate" >> /root/generate-ca-cert.log
+
+    max_retries=5
+    count=0
+
+    until apt-get update -qq && apt-get install -yq ca-certificates jq; do
+      count=$((count+1))
+      if [ "$count" -ge "$max_retries" ]; then
+        echo "Failed to install apt packages after $count attempts" >&2
+        exit 1
+      fi
+      sleep 5
+    done
+
+    ENCODED_CA=__CA_CERTIFICATE_ENCODED__
+    if [ -z "$ENCODED_CA" ]; then
+      echo "CA certificate is not set. Exiting." >> /root/generate-ca-cert.log
+      exit 1
+    fi
+    echo "$ENCODED_CA" | base64 -d > /usr/local/share/ca-certificates/ca-certificate.crt
+    if [ $? -ne 0 ]; then
+      echo "Failed to decode CA certificate." >> /root/generate-ca-cert.log
+      exit 1
+    fi
+    echo "CA certificate generated successfully." >> /root/generate-ca-cert.log
+    # Update the CA certificates
+    if ! update-ca-certificates --fresh; then
+      echo "Failed to update CA certificates." >> /root/generate-ca-cert.log
+      exit 1
+    fi
+    echo "CA certificates updated successfully." >> /root/generate-ca-cert.log
+    EOF
+
+    create_script_file "$ROUTING_IPTABLES_PATH" <<'EOF'
+    #!/bin/bash
+    echo "Setting iptables rules" >> /root/iptables-postrouting.log
+    INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
+    IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
+    iptables -tnat -N sky-postrouting 2>/dev/null
+    iptables -tnat -C POSTROUTING -j sky-postrouting 2>/dev/null || \
+      iptables -tnat -A POSTROUTING -j sky-postrouting
+    iptables -tnat -C sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE 2>/dev/null || \
+      iptables -tnat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
+    iptables -tnat -C sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE 2>/dev/null || \
+      iptables -tnat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
+    EOF
+
+    $NETWORKD_DISPATCHER_PATH >> /root/50-tailscale.log 2>&1 || true
+    $CA_CERTIFICATES_PATH >> /root/generate-ca-cert.log 2>&1 || true
+    $ROUTING_IPTABLES_PATH >> /root/iptables-postrouting.log 2>&1 || true
+    
+    echo "Ensuring cron jobs are present" >> "$LOG_FILE"
+    CRON_ENTRY_PING="* * * * * /usr/local/bin/ping-check.sh"
+    add_cron_entry "$CRON_ENTRY_PING"
+
+  # Prob script to check for existence of tailscale run script and cron job
+  tailscale_run_prob_script.sh: |
     #!/bin/bash
     set -euo pipefail
 
+    TS_RUN_SCRIPT_PATH="/usr/local/bin/tailscale_run.sh"
+
+    compliant=true    
+    declare -A details
+    if [[ ! -f "$TS_RUN_SCRIPT_PATH" ]]; then
+      compliant=false
+      details["tailscale_run_script_path"]="missing"
+    fi
+
+    CRON_ENTRY_TS="*/5 * * * * /usr/local/bin/tailscale_run.sh"
+    EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
+    if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY_TS"; then
+      compliant=false
+      details["cron_entry_tailscale_run"]="missing"
+    fi
+
+    # build JSON
+    checks="{"
+      for key in "${!details[@]}"; do
+          checks+="\"$key\":\"${details[$key]}\","
+      done
+    checks="${checks%,}}"
+
+    facts=$(jq -n \
+      --arg tailscale_run_script_path "$TS_RUN_SCRIPT_PATH" \
+      --argjson checks "$checks" \
+      '{ 
+        tailscale_run_script_path: $tailscale_run_script_path,
+        checks: $checks
+      }'
+    )
+
+    jq -n --argjson compliant "$compliant" --argjson facts "$facts" '{compliant: $compliant, facts: $facts}' 
+
+  # Tailscale run script, creates a local script to run tailscale up periodically
+  # and ensures a cron job exists to run it every 5 minutes.
+  tailscale_run_script.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    TS_RUN_SCRIPT_PATH="/usr/local/bin/tailscale_run.sh"
+    LOG_FILE="/root/tailscale-run.log"
+
+    create_script_file() {   
+      local SCRIPT_PATH="$1"   # first argument: output script path, content from stdin
+
+      echo "Creating $SCRIPT_PATH" >> "$LOG_FILE"
+      # Read stdin into the target file
+      cat > "$SCRIPT_PATH"
+
+      chmod 0755 "$SCRIPT_PATH"
+      echo "Created and made executable: $SCRIPT_PATH" >> "$LOG_FILE"
+    }
+    add_cron_entry() {
+      local CRON_ENTRY="$1"   # the cron line to add
+
+      # Capture existing crontab (ignore error if empty)
+      local EXISTING_CRON
+      EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
+
+      if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY"; then
+        echo "Adding cron entry: $CRON_ENTRY" >> "$LOG_FILE"
+        (echo "$EXISTING_CRON"; echo "$CRON_ENTRY") | crontab -
+      else
+        echo "Cron entry already present: $CRON_ENTRY" >> "$LOG_FILE"
+      fi
+    }
+
+    create_script_file "$TS_RUN_SCRIPT_PATH" <<'EOF'
+    #!/bin/bash
+    set -euo pipefail
     log() {
       echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") - $*"
     }
@@ -73,224 +308,14 @@ data:
       iptables -tnat -D ts-postrouting -m mark --mark 0x40000/0xff0000 -j MASQUERADE
     fi
     log "Tailscale setup completed" >> /root/tailscale-setup.log
-
-  networkd_dispatcher.sh: |
-    #!/bin/sh
-    INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
-    echo "Enabling Segmentation Offload" >> /root/50-tailscale.log
-    # check out
-    # https://tailscale.com/kb/1320/performance-best-practices#linux-optimizations-for-subnet-routers-and-exit-nodes
-    if systemctl is-enabled networkd-dispatcher &>/dev/null; then
-      echo "networkd-dispatcher is enabled." >> /root/50-tailscale.log
-      ethtool -K $INTF_NAME rx-udp-gro-forwarding on rx-gro-list off
-    else
-      echo "networkd-dispatcher is not enabled. Skipping." >> /root/50-tailscale.log
-    fi
-  
-  ca_certificates.sh: |
-    #!/bin/bash
-    echo "Generating CA certificate" >> /root/generate-ca-cert.log
-
-    max_retries=5
-    count=0
-
-    until apt-get update -qq && apt-get install -yq ca-certificates jq; do
-      count=$((count+1))
-      if [ "$count" -ge "$max_retries" ]; then
-        echo "Failed to install apt packages after $count attempts" >&2
-        exit 1
-      fi
-      sleep 5
-    done
-
-    ENCODED_CA=__CA_CERTIFICATE_ENCODED__
-    if [ -z "$ENCODED_CA" ]; then
-      echo "CA certificate is not set. Exiting." >> /root/generate-ca-cert.log
-      exit 1
-    fi
-    echo "$ENCODED_CA" | base64 -d > /usr/local/share/ca-certificates/ca-certificate.crt
-    if [ $? -ne 0 ]; then
-      echo "Failed to decode CA certificate." >> /root/generate-ca-cert.log
-      exit 1
-    fi
-    echo "CA certificate generated successfully." >> /root/generate-ca-cert.log
-    # Update the CA certificates
-    if ! update-ca-certificates --fresh; then
-      echo "Failed to update CA certificates." >> /root/generate-ca-cert.log
-      exit 1
-    fi
-    echo "CA certificates updated successfully." >> /root/generate-ca-cert.log
-  
-  routing_iptables.sh: |
-    #!/bin/bash
-    echo "Setting iptables rules" >> /root/iptables-postrouting.log
-    INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
-    IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
-    iptables -tnat -N sky-postrouting
-    iptables -tnat -A POSTROUTING -j sky-postrouting
-    iptables -tnat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
-    iptables -tnat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
-  
-  # Checks whether the expected files from setup_environment.sh exist and prints a JSON object:
-  # {
-  #   "facts": { ... },
-  #   "compliant": true|false
-  # }
-  setup_environment_prob.sh: |
-    #!/bin/bash
-    set -euo pipefail
-
-    TS_RUN_PATH="/usr/local/bin/tailscale_run.sh"
-    PING_CHECK_PATH="/usr/local/bin/ping-check.sh"
-    NETWORKD_DISPATCHER_PATH="/etc/networkd-dispatcher/routable.d/50-tailscale"
-    CA_CERTIFICATES_PATH="/usr/local/bin/generate-ca-cert.sh"
-    ROUTING_IPTABLES_PATH="/usr/local/bin/iptables-postrouting.sh"
-
-    declare -A files=(
-      [tailscale_setup]="$TS_RUN_PATH"
-      [ping_check]="$PING_CHECK_PATH"
-      [networkd_dispatcher]="$NETWORKD_DISPATCHER_PATH"
-      [ca_certificates]="$CA_CERTIFICATES_PATH"
-      [routing_iptables]="$ROUTING_IPTABLES_PATH"
-    )
-
-    # Build facts JSON
-    first=true
-    all_present=true
-    facts_json=""
-
-    for key in "${!files[@]}"; do
-      path="${files[$key]}"
-      if [ -f "$path" ]; then
-        exists=true
-      else
-        exists=false
-        all_present=false
-      fi
-
-      # add comma if needed
-      if [ "$first" = true ]; then
-        first=false
-      else
-        facts_json+=","
-      fi
-
-      # escape the path for JSON (simple approach, assuming no control chars)
-      esc_path=$(printf '%s' "$path" | sed 's/\\/\\\\/g; s/"/\\"/g')
-
-      facts_json+="\"$key\": {\"path\": \"$esc_path\", \"exists\": $exists}"
-    done
-
-    # Print final JSON
-    compliant_json=$([ "$all_present" = true ] && echo "true" || echo "false")
-
-    printf '{'
-    printf '"facts": {'"$facts_json"'}'
-    printf ', "compliant": %s' "$compliant_json"
-    printf '}\n'
-
-  setup_environment.sh: |
-    #!/bin/bash
-    set -euo pipefail
-    
-    TS_RUN_PATH="/usr/local/bin/tailscale_run.sh"
-    PING_CHECK_PATH="/usr/local/bin/ping-check.sh"
-    NETWORKD_DISPATCHER_PATH="/etc/networkd-dispatcher/routable.d/50-tailscale"
-    CA_CERTIFICATES_PATH="/usr/local/bin/generate-ca-cert.sh"
-    ROUTING_IPTABLES_PATH="/usr/local/bin/iptables-postrouting.sh"
-
-    # Create tailscale_run.sh if it does not exist
-    if [ ! -f "$TS_RUN_PATH" ]; then
-      log "Creating $TS_RUN_PATH"
-      cat > "$TS_RUN_PATH" <<'EOF'
-    __TS_SETUP_SCRIPT__
     EOF
 
-      chmod 0755 "$TS_RUN_PATH"
-      log "Created and made executable: $TS_RUN_PATH"
-      # tailscale should be executed later when it is installed
-    else
-      log "$TS_RUN_PATH already exists; leaving it unchanged"
-    fi
+    echo "Ensuring cron jobs are present" >> "$LOG_FILE"
+    CRON_ENTRY_TS="*/5 * * * * /usr/local/bin/tailscale_run.sh"
+    add_cron_entry "$CRON_ENTRY_TS"
 
-    # Create ping-check.sh if it does not exist
-    if [ ! -f "$PING_CHECK_PATH" ]; then
-      log "Creating $PING_CHECK_PATH"
-      cat > "$PING_CHECK_PATH" <<'EOF'
-    __PING_CHECK_SCRIPT__
-    EOF
-
-      chmod 0755 "$PING_CHECK_PATH"
-      log "Created and made executable: $PING_CHECK_PATH"
-    else
-      log "$PING_CHECK_PATH already exists; leaving it unchanged"
-    fi
-
-    # Create networkd-dispatcher script if it does not exist
-    if [ ! -f "$NETWORKD_DISPATCHER_PATH" ]; then
-      log "Creating $NETWORKD_DISPATCHER_PATH"
-      cat > "$NETWORKD_DISPATCHER_PATH" <<'EOF'
-    __NETWORKD_DISPATCHER_SCRIPT__
-    EOF
-
-      chmod 0755 "$NETWORKD_DISPATCHER_PATH"
-      log "Created and made executable: $NETWORKD_DISPATCHER_PATH"
-      log "Running networkd-dispatcher script now"
-      $NETWORKD_DISPATCHER_PATH >> /root/50-tailscale.log 2>&1 || true
-    else
-      log "$NETWORKD_DISPATCHER_PATH already exists; leaving it unchanged"
-    fi
-
-    # Create CA certificates script if it does not exist
-    if [ ! -f "$CA_CERTIFICATES_PATH" ]; then
-      log "Creating $CA_CERTIFICATES_PATH"
-      cat > "$CA_CERTIFICATES_PATH" <<'EOF'
-    __CA_CERTIFICATES_SCRIPT__
-    EOF
-      chmod 0755 "$CA_CERTIFICATES_PATH"
-      log "Created and made executable: $CA_CERTIFICATES_PATH"
-      log "Running CA certificates script now"
-      $CA_CERTIFICATES_PATH >> /root/generate-ca-cert.log 2>&1 || true
-    else
-      log "$CA_CERTIFICATES_PATH already exists; leaving it unchanged"
-    fi
-
-    # Create routing iptables script if it does not exist
-    if [ ! -f "$ROUTING_IPTABLES_PATH" ]; then
-      log "Creating $ROUTING_IPTABLES_PATH"
-      cat > "$ROUTING_IPTABLES_PATH" <<'EOF'
-    __ROUTING_IPTABLES_SCRIPT__
-    EOF
-      chmod 0755 "$ROUTING_IPTABLES_PATH"
-      log "Created and made executable: $ROUTING_IPTABLES_PATH"
-      log "Running routing iptables script now"
-      $ROUTING_IPTABLES_PATH >> /root/iptables-postrouting.log 2>&1 || true
-    else
-      log "$ROUTING_IPTABLES_PATH already exists; leaving it unchanged"
-    fi
-
-    # Ensure root crontab contains the entries (append only if missing)
-    # Cron lines as requested: run tailscale_setup every 5 minutes, ping-check every minute.
-    CRON_ENTRY_TS="*/5 * * * * sudo /usr/local/bin/tailscale_run.sh"
-    CRON_ENTRY_PING="* * * * * sudo /usr/local/bin/ping-check.sh"
-
-    # Read existing crontab (if any)
-    EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
-
-    if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY_TS"; then
-      log "Adding tailscale_setup cron entry"
-      (echo "$EXISTING_CRON"; echo "$CRON_ENTRY_TS") | crontab -
-    else
-      log "tailscale_setup cron entry already present"
-    fi
-
-    if ! echo "$EXISTING_CRON" | grep -Fq "$CRON_ENTRY_PING"; then
-      log "Adding ping-check cron entry"
-      # must re-fetch current crontab in case it changed above
-      (crontab -l 2>/dev/null || true; echo "$CRON_ENTRY_PING") | crontab -
-    else
-      log "ping-check cron entry already present"
-    fi
+    # Run once immediately
+    $TS_RUN_SCRIPT_PATH >> "$LOG_FILE" 2>&1 || true
 
   # Script to gather facts about Tailscale installation
   # and determine compliance (installed and running)
