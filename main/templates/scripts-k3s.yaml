@@ -132,8 +132,19 @@ data:
     export TOKEN="__K3STOKEN__"
     export HOST="__K3SHOSTIP__"
     export SESSION_NAME="k3s-agent-install"
-    export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
 
+    # Set timezone to avoid potential issues with TLS certs
+    timedatectl set-timezone America/Toronto
+    
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "x86_64" ]]; then
+      export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
+    elif [[ "$ARCH" == "aarch64" ]]; then
+      export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.4%2Bk3s1/k3s-arm64"
+    else
+      echo "Unsupported architecture: $ARCH" >&2
+      exit 1
+    fi
 
     # ---- Prereqs ----
     sudo apt-get update -y
@@ -226,7 +237,7 @@ data:
 
     while [ "\$install_success" = false ] && [ \$retry_count -lt \$max_retries ]; do
       echo "INFO: Download k3s from \$K3S_URL_FILE (attempt \$((retry_count + 1))/\$max_retries)"
-      if curl --max-time 80 -sfL --retry 3 -C - "\$K3S_URL_FILE" -o "/tmp/k3s"; then
+      if curl --max-time 80 -sfL --retry 3 "\$K3S_URL_FILE" -o "/tmp/k3s"; then
         echo "INFO: Downloaded k3s binary"
         sudo install -m 0755 /tmp/k3s "\$K3S_BIN/k3s"
         echo "INFO: Installing k3s agent..."
@@ -235,7 +246,7 @@ data:
           INSTALL_K3S_SKIP_DOWNLOAD=true \
           K3S_TOKEN="\$TOKEN" \
           INSTALL_K3S_EXEC=" \
-            --node-label skycluster.io/node-type=control-plane \
+            --node-label skycluster.io/node-type=agent \
             --node-label skycluster.io/provider-platform=__PROVIDERPLATFORM__ \
             --node-label skycluster.io/provider-region=__REGION__ \
             --node-label skycluster.io/provider-identifier=__PROVIDERPLATFORM__-__REGION__-__ZONE__ \

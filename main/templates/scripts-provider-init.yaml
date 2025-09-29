@@ -1,4 +1,4 @@
-{{ if .Values.install }}
+{{ if or .Values.install .Values.test }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -336,8 +336,20 @@ data:
           export USERNAME=`whoami`
           export K3S_HOME=/home/$USERNAME/k3s
           export KUBECONFIG=$K3S_HOME/k3s.yaml
-          export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
           export K3S_BIN="/usr/local/bin"
+          
+          # Set timezone to avoid potential issues with TLS certs
+          timedatectl set-timezone America/Toronto
+
+          ARCH=$(uname -m)
+          if [[ "$ARCH" == "x86_64" ]]; then
+            export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.3+k3s1/k3s"
+          elif [[ "$ARCH" == "aarch64" ]]; then
+            export K3S_URL_FILE="https://github.com/k3s-io/k3s/releases/download/v1.33.4%2Bk3s1/k3s-arm64"
+          else
+            echo "Unsupported architecture: $ARCH" >&2
+            exit 1
+          fi
 
           mkdir -p $K3S_HOME
           mkdir -p $K3S_BIN
@@ -364,7 +376,7 @@ data:
           retry_count=0
           install_success=false
           while [ $retry_count -lt $max_retries ]; do
-            if curl --max-time 80 -sfL --retry 3 -C - "$K3S_URL_FILE" -o "$K3S_BIN/k3s"; then 
+            if curl --max-time 80 -sfL --retry 3 "$K3S_URL_FILE" -o "$K3S_BIN/k3s"; then 
               echo "INFO: Downloaded k3s binary"
               chmod +x "$K3S_BIN/k3s"
               echo "Installing k3s..."

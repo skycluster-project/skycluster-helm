@@ -100,6 +100,9 @@ data:
     mkdir -p $K3S_HOME/scripts
     mkdir -p $K3S_HOME/logs
 
+    # Set timezone to avoid potential issues with TLS certs
+    timedatectl set-timezone America/Toronto
+
     exec > "$K3S_HOME/logs/k3s-install-$(date +'%Y-%m-%d_%H-%M').log" 2>&1
 
     export INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
