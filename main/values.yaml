@@ -19,11 +19,11 @@ providers:
       cloudwatchevents: 
         name: provider-aws-cloudwatchevents
         version: v1
-        enabled: false
+        enabled: true
       sqs:
         name: provider-aws-sqs
         version: v1
-        enabled: false
+        enabled: true
     gcp:  
       compute:
         name: provider-gcp-compute
@@ -67,7 +67,7 @@ providers:
       repo: xpkg.upbound.io/upbound/provider-kubernetes
     ssh:
       name: provider-ssh
-      version: latest
+      version: v0.1.1-rc3
       enabled: true
       repo: docker.io/etesami/provider-ssh
 
