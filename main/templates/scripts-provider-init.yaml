@@ -1,4 +1,4 @@
-{{ if or .Values.install .Values.test }}
+{{ if or .Values.install }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -104,12 +104,30 @@ data:
         content: |
           #!/bin/bash
           echo "Setting iptables rules" >> /root/iptables-postrouting.log
+
           INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
           IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
-          iptables -tnat -N sky-postrouting
-          iptables -tnat -A POSTROUTING -j sky-postrouting
-          iptables -tnat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
-          iptables -tnat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
+
+          MAX_RETRIES=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            {
+              # Create chain if not exists
+              iptables -t nat -L sky-postrouting &>/dev/null || iptables -t nat -N sky-postrouting
+
+              iptables -t nat -C POSTROUTING -j sky-postrouting 2>/dev/null || \
+                iptables -t nat -A POSTROUTING -j sky-postrouting
+
+              # Add masquerade rules if missing
+              iptables -t nat -C sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE 2>/dev/null || \
+                iptables -t nat -A sky-postrouting -s 100.64.0.0/16 -o "$INTF_NAME" -j MASQUERADE
+              
+              iptables -t nat -C sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE 2>/dev/null || \
+                iptables -t nat -A sky-postrouting -s __SUBNETCIDR__ -o "$INTF_NAME" -j MASQUERADE
+
+            } && break
+            echo "Attempt $i failed, retrying in 3s..." >> /root/iptables-postrouting.log
+            sleep 3
+          done
     runcmd:
       - /usr/local/bin/iptables-postrouting.sh
 ---
