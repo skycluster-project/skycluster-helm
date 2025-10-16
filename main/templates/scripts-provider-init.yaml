@@ -130,6 +130,10 @@ data:
           done
     runcmd:
       - /usr/local/bin/iptables-postrouting.sh
+      - |
+        crontab -u root -l 2>/dev/null > /tmp/mycron || true
+        echo "*/5 * * * * sudo /usr/local/bin/iptables-postrouting.sh" >> /tmp/mycron
+        crontab -u root /tmp/mycron
 ---
 apiVersion: v1
 kind: ConfigMap
