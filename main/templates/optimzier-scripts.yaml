@@ -1336,10 +1336,27 @@ data:
         json.dump(deployPlan, f)
         # json.dump(deployPlan, f, indent=2)
 
-    print("satrt optimization")
-    projPath = "/shared/"
-    print(f"Reading from the directory: {projPath}")
-    optimize(projPath)
+    print("start optimization")
+    PROJECT_PATH = os.getenv('PROJECT_PATH', '/shared/')
+    print(f"Reading from the directory: {PROJECT_PATH}")
+    optimize(PROJECT_PATH)
     print("Optimization completed.")
+  start.sh: |
+    #!/bin/bash
+
+    export SCRIPT_PATH=${SCRIPT_PATH:-"/scripts/"}
+    export PROJECT_PATH=${PROJECT_PATH:-"/shared/"}
+    
+    /venv/bin/python3 $SCRIPT_PATH/call_optimization.py 
+
+    # if deploy-plan.json is generated, use kubectl to generate a configmap
+    if [ -f "$PROJECT_PATH/deploy-plan.json" ]; then
+      echo "Generating Kubernetes configmap from deploy-plan.json..."
+      kubectl create configmap deploy-plan-config --from-file=$PROJECT_PATH/deploy-plan.json --dry-run=client -o yaml > $SCRIPT_PATH/deploy-plan-configmap.yaml
+      echo "Configmap generated at $SCRIPT_PATH/deploy-plan-configmap.yaml"
+      kubectl apply -f $SCRIPT_PATH/deploy-plan-configmap.yaml
+    else
+      echo "deploy-plan.json not found. Skipping configmap generation."
+    fi
 ---
 {{ end }}
