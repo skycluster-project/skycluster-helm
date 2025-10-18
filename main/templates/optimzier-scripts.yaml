@@ -1,83 +1,8 @@
-{{ if .Values.install }}
----
+{{ if or .Values.install .Values.test }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: skycluster-optimizer-starter
-  namespace: skycluster-system
-  labels:
-    skycluster.io/managed-by: skycluster
-    skycluster.io/config-type: optimization-starter
-data:
-  init.sh: |
-    printf "%s" "$TASKS" > /shared/tasks.csv
-    printf "%s" "$TASKS_EDGES" > /shared/tasks-edges.csv
-    printf "%s" "$TASKS_LOCATIONS" > /shared/tasks-locations.csv
-    
-    kubectl get cm -n skycluster \
-      -l skycluster.io/config-type=provider-mappings,skycluster.io/managed-by=skycluster \
-      -o json > /shared/providers.json
-    
-    kubectl get skycluster __SKYCLUSTER__NAME__ -o json -n default \
-      | jq '.spec.skyComponents' | jq -c > /shared/skycluster-components.json
-
-    kubectl get configmaps -l \
-      skycluster.io/config-type=provider-vservices,skycluster.io/managed-by=skycluster \
-      -n skycluster -o json | jq -c > /shared/offerings.json
-    
-    kubectl get configmaps -l \
-      skycluster.io/config-type=provider-latencies,skycluster.io/managed-by=skycluster \
-      -n skycluster -o json | jq -c ".items[0].data" > /shared/provider-latencies.json
-  main.sh: |
-    . /venv/bin/activate
-    
-    python3 /scripts/csv_prepration.py
-    status=$?
-    if [ $status -ne 0 ]; then
-      echo "Failed to run the main.py: $status"
-      exit 1
-    fi
-
-    python3 /scripts/call_optimization.py
-    status=$?
-    if [ $status -ne 0 ]; then
-      echo "Failed to run the call_optimization.py: $status"
-      exit 1
-    fi
-    RESULT=""
-    DEPLOY_PLAN=""
-    if [ -f /shared/optimization-result.txt ]; then
-      RESULT=$(cat /shared/optimization-result.txt)
-    else
-      echo "Failed to find the optimization-result.txt"
-      exit 1
-    fi
-    if [ -f /shared/deploy-plan.json ]; then
-      DEPLOY_PLAN=$(cat /shared/deploy-plan.json)
-    else
-      echo "Failed to find the deploy-plan.json"
-      exit 1
-    fi
-
-    kubectl delete configmap __CONFIG_NAME__ -n skycluster
-    kubectl create configmap __CONFIG_NAME__ \
-      --from-literal=deploy-plan="$DEPLOY_PLAN" \
-      --from-literal=result="$RESULT" \
-      -n skycluster
-    status=$?
-    if [ $status -ne 0 ]; then
-      echo "Failed to create the configmap: $status"
-      exit 1
-    fi
-    kubectl label configmaps __CONFIG_NAME__ -n skycluster \
-      skycluster.io/managed-by=skycluster \
-      skycluster.io/config-type=optimization-status
-    exit 0
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: skycluster-optimizer-scripts
+  name: script-optimizer
   namespace: skycluster-system
   labels:
     skycluster.io/managed-by: skycluster
@@ -102,6 +27,14 @@ data:
       os.makedirs(outputDirYaml, exist_ok=True)
       os.makedirs(outputDirCsv, exist_ok=True)
       return outputPath
+
+    # We calculate the mu and sigma for the lognormal distribution
+    # so that the generated values have the mean and std as specified:
+    def lognormal(mean, std, rng, np_rng):
+      from numpy import log, sqrt
+      mu = log(mean**2 / sqrt(std**2 + mean**2))
+      sigma = sqrt(log(1 + (std / mean)**2))
+      return np_rng.lognormal(mean=mu, sigma=sigma)
 
     def check_dir_exists(thisPath):
       if not os.path.exists(thisPath):
@@ -243,7 +176,7 @@ data:
           self.task = node  # node itself
           self.replicaNum = 1 if num is None else num
           self.pName = None
-          self.pCloudName = None
+          self.platform = None
           self.pRegion = None
       
       depTaskDag = Dag()
@@ -258,7 +191,7 @@ data:
             pp = providers[mappingRev[u]]
             tt = ReplicatedTask(f"{tname}_{iReplicCount}", tasks[tname], iReplicCount)
             tt.pName = pp.name
-            tt.pCloudName = pp.cName
+            tt.platform = pp.platform
             tt.pRegion = f'{pp.regionAlias}\n{pp.zone}.{pp.pType}'
             replicatedNodes[tname][mappingRev[u]] = tt
             depTaskDag.add(tt)
@@ -281,7 +214,7 @@ data:
       allRegions = set([n.pRegion for n in depTaskDag.get_nodes()])
       colorMap = {v: plt.cm.tab20(i) for i, v in enumerate(allRegions)}
       nodeColors = [colorMap[n.pRegion] for n in depTaskDag.get_nodes()]
-      nodeLabels = {n:f'{n.name}\n{n.pCloudName}.{n.pRegion}' for n in depTaskDag.graph.nodes()}
+      nodeLabels = {n:f'{n.name}\n{n.platform}.{n.pRegion}' for n in depTaskDag.graph.nodes()}
       
       timestamp = time.strftime("%Y%m%d_%H%M%S")
       print(f"Drawing the graph: graph_{timestamp}.png")
@@ -290,9 +223,147 @@ data:
         depTaskDag.get_graph(), outputPath, f"graph_{timestamp}", 
         nodeLabels=nodeLabels , fontSizes=7, nodeColors=nodeColors, 
         nodeSize=2000, spring_k=springK, figSize=(8,6))
+        
+    def short_uuid():
+      return base64.urlsafe_b64encode(uuid.uuid4().bytes).rstrip(b'=').decode('ascii')
+      
+
+    import math
+    from copy import deepcopy
+    from typing import Dict, List, Tuple, Any
+
+    def compute_deployment_costs(services: Dict[str, Dict[str, Dict[str, float]]],
+                                task: Any, providers: Any) -> Dict[str, float]:
+      """
+      Compute total deployment cost per provider if deploying task using that single provider.
+      Returns dict: provider -> total_cost (float) or math.inf if provider cannot satisfy all requirements.
+
+      services example:
+        {
+          "vs1": {
+            "costs": {"aws": 1.0, "gcp": 1.2},
+            "availabilities": {"aws": 100, "gcp": 50}
+          },
+          ...
+        }
+
+      task example:
+        {"vservices": [[("vs1", 3), ("vs2", 3)], [("vs3", 2)]]}
+        meaning: first requirement can be vs1 or vs2 (choose cheapest available), second must be vs3.
+      """
+
+      result: Dict[str, float] = {}
+      for provider in providers:
+        # copy capacities per service for this provider
+        capacities = {svc_name: svc_obj.availCountDict.get(provider, 0)
+                      for svc_name, svc_obj in services.items()}
+        total_cost = 0.0
+        feasible = True
+        
+        for alternatives in task.vservices:
+          # alternatives: list of tuples (service_name, count)
+          best_choice = None  # (cost, service_name, count)
+          for svc, count in alternatives:
+            # check capacity and cost on this provider
+            svc_name = svc.name
+            avail = capacities.get(svc_name, 0)
+            count = int(count)
+            if avail < count:
+              continue
+            unit_cost = services.get(svc_name, {}).costs.get(provider, None)
+            if unit_cost is None:
+              continue
+            unit_cost = int(unit_cost * (10**5))  # scale to avoid float issues
+            cost = unit_cost * count
+            if best_choice is None or cost < best_choice[0]:
+              best_choice = (cost, svc_name, count)
+
+          if best_choice is None:
+            # no alternative can serve this requirement on this provider
+            feasible = False
+            break
+
+          # reserve capacity and add cost
+          _, chosen_svc, chosen_count = best_choice
+          capacities[chosen_svc] -= chosen_count
+          total_cost += best_choice[0]
+
+          if not feasible:
+            break
+
+        result[provider] = total_cost if feasible else math.inf
+
+      # return scaled back costs
+      for provider in result:
+        if result[provider] != math.inf:
+          result[provider] /= (10**5)
+      return result
+
+
+    def topo_from_tasks(tasks: Dict[Any, Any],
+                        edges: List[Tuple[Any, Any, float, float]]):
+      """
+      tasks: dict task_id -> task_obj
+      edges: list of (src_id, dst_id, latency, dataRate)
+      Returns: (topo_order_ids, topo_order_objs)
+      """
+      G = nx.DiGraph()
+      # add nodes from tasks and ensure nodes that appear only in edges are included
+      G.add_nodes_from(tasks.keys())
+      for src, dst, latency, dataRate in edges:
+        G.add_edge(src, dst, latency=latency, dataRate=dataRate)
+
+      if not nx.is_directed_acyclic_graph(G):
+        raise ValueError("Graph has a cycle; topological sort not possible")
+
+      topo_ids = list(nx.topological_sort(G))
+      topo_objs = [tasks[k] for k in topo_ids if k in tasks]
+      return topo_ids, topo_objs
+
+
+    def greedy_with_beam(tasks, Vp, edges, egress_cost, vServices, providers, top_k=5):
+      pEdges = {(u,v):(latency,dr) for (u,v,latency,dr) in egress_cost}
+      topo, _ = topo_from_tasks(tasks, edges)
+      # beam holds tuples (assignment_dict, cost_sum, used_edges_list)
+      beam = [({}, 0.0, [])]
+
+      for i in topo:
+        t = tasks[i]
+        new_beam = []
+        for assign, cost_sum, used in beam:
+          estimations = compute_deployment_costs(vServices, t, providers)
+          for u in Vp:
+            if u not in t.permittedLocData:
+              continue
+            est = estimations.get(u, float('inf'))
+            candidate_edges = []
+            for (j, i2, l, d) in edges:
+              if i2 == i and j in assign:
+                v = assign[j]
+                if (v, u) in pEdges and pEdges[(v, u)][0] <= convert_to_ms(l):
+                  est += convert_to_GB(d) * pEdges[(v,u)][1]
+                  candidate_edges.append((j,i))
+                else:
+                  est = float('inf'); break
+            if est == float('inf'):
+              continue
+            new_assign = dict(assign); new_assign[i] = u
+            new_used = used + candidate_edges
+            new_beam.append((new_assign, cost_sum + est, new_used))
+        # keep top_k by cost
+        if not new_beam:
+          return None, None, None  # no feasible continuation
+        new_beam.sort(key=lambda x: x[1])
+        beam = new_beam[:top_k]
+
+      # pick best complete assignment
+      best_assign, best_cost, best_used = min(beam, key=lambda x: x[1])
+      return best_assign, best_cost, best_used
   module_data.py: |
     from collections import defaultdict
     import json
+
+    PLATFORMS = ['aws', 'gcp', 'openstack']
 
     CLOUD_REGIONS_DICT = {
         'af-south':       ['af-south-1', 'af-south-2', 'af-south-3'],
@@ -318,9 +389,9 @@ data:
     }
 
     class Provider:
-      def __init__(self, name, cName):
+      def __init__(self, name, platform):
         self.name = name
-        self.cName = cName # cloud name, e.g. aws, azure, gcp, ...
+        self.platform = platform # cloud name, e.g. aws, azure, gcp, ...
         self.region = ""
         self.regionAlias = ""
         self.zone = ""
@@ -397,7 +468,6 @@ data:
       def contain_vservice(self, vs):
         return vs in self.vservices
 
-
     def filter_providers2(providers, filter):
       # This function takes a dictionary of providers and a filter dictionary
       # and returns a filtered dictionary of providers based on the filter
@@ -406,130 +476,23 @@ data:
       
       filtered_providers = providers
       for k, v in filter.items():
-        if k == 'providerName':
+        if k == 'name':
           # TODO: we should distinguish between the provider name and the provider cloud name
           # currently we only support provider cloud name, i.e. aws, azure, gcp, ...
-          filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.cName == v}
-        if k == 'providerType':
+          filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.name == v}
+        if k == 'platform':
+          filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.platform == v}
+        if k == 'pType':
           filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.pType == v}
-        if k == 'providerRegionAlias':
+        if k == 'regionAlias':
           filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.regionAlias == v}
-        if k == 'providerRegion':
+        if k == 'region':
           filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.region == v}
-        if k == 'providerZone':
+        if k == 'zone':
           filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.zone == v}
         
       return filtered_providers
 
-    def filter_providers(providers, locName=None, locType=None, locRegionAlias=None, locRegion=None, locZone=None):
-      if not providers:
-        return []
-      
-      # Filter based on locName, locType, and locRegion, but only if they're provided
-      filtered_providers = providers
-      if locName is not None:
-        filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.name == locName}
-      if locType is not None:
-        filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.pType == locType}
-      if locRegionAlias is not None:
-        filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.regionAlias == locRegionAlias}
-      if locRegion is not None:
-        filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.region == locRegion}
-      if locZone is not None:
-        filtered_providers = {pID:pp for pID,pp in filtered_providers.items() if pp.zone == locZone}
-      
-      return filtered_providers
-
-    def generate_latency(src_region, dst_region, src_type, dst_type):
-      # e.g. input:
-      # us-east, us-west, cloud, edge
-      def cloud_cloud_latency(same_continent):
-        if same_continent:
-          # avg of us-east (gcp)/us-west (aws) and intra eu cloud latencies
-          # close to cogent latencies
-          mean, std = 100, 10
-          return lognormal(mean, std)
-        else:
-          # avg of us-east/eu and us-west/eu and us-west/au and eu/au cloud latencies
-          # higher than cogent latencies
-          mean, std = 200, 50
-          return lognormal(mean, std)
-
-      def cloud_edge_latency(): # same continent, same region
-        # avg of us-east, us-west and eu cloud to edge latencies
-        mean, std = 15.44, 7
-        return lognormal(mean, std)
-      
-      def cloud_nte_latency(): # same continent, same region
-        # avg of us-east, us-west and eu cloud to nte latencies
-        mean, std = 25, 15
-        return lognormal(mean, std)
-        
-      def edge_edge_latency(): # same continent, same region (they are in close proximity)
-        mean, std = 6, 4
-        return lognormal(mean, std)
-      
-      # I assume the nte-nte latency is applicable only for the same region
-      # or those nte locations that are close to each other
-      # I used the latency between specified zones in us within aws
-      # Refer to the paper
-      def nte_nte_latency(): # same continent, same region
-        mean, std = 10, 1
-        return lognormal(mean, std)
-        # return random.normalvariate(35.56, 20)
-        
-      # same continent, same region
-      def nte_edge_latency():
-        mean, std = 8, 3
-        return lognormal(mean, std)
-        # return random.normalvariate(26.59, 10)
-      
-      # Extract continent from region
-      src_continent = src_region.split('-')[0]
-      dst_continent = dst_region.split('-')[0]
-
-      src_region_ = src_region.split('-')[1] 
-      dst_region_ = dst_region.split('-')[1]
-
-      same_region = src_region_ == dst_region_
-      same_continent = src_continent == dst_continent
-
-      if src_type == 'cloud' and dst_type == 'cloud':
-        total_latency = cloud_cloud_latency(same_continent)
-        return round(total_latency, 2)
-
-      elif (src_type == 'cloud' and dst_type == 'nte') or (src_type == 'nte' and dst_type == 'cloud'):
-        total_latency = cloud_nte_latency()
-        return round(total_latency, 2)
-      
-      elif (src_type == 'cloud' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'cloud'):
-        total_latency = cloud_edge_latency()
-        return round(total_latency, 2)
-        
-      elif src_type == 'edge' and dst_type == 'edge':
-        total_latency = edge_edge_latency()
-        return round(total_latency, 2)
-      
-      elif src_type == 'nte' and dst_type == 'nte':
-        # we only support nte to nte communication that are within a same region 
-        # or categorized as a "zone"
-        total_latency = nte_nte_latency()
-        return round(total_latency, 2)  
-      
-      elif (src_type == 'nte' and dst_type == 'edge') or (src_type == 'edge' and dst_type == 'nte'):
-        total_latency = nte_edge_latency()
-        return round(total_latency, 2)
-      
-      else:
-        raise ValueError("Unsupported communication type")
-      
-    # give path reutrn the latency from the source to the destination
-    def get_latency(composedGraph, path):
-      latency = 0
-      for i in range(len(path) - 1):
-        latency += composedGraph.edges[path[i], path[i+1]]['latency']
-      return round(latency, 2)
-      
     def create_mapping(string_list):
       def get_alphabet_key(index):
         # Convert an index to alphabetic keys like 'a', 'b', ..., 'z', 'aa', 'ab', ...
@@ -542,188 +505,371 @@ data:
       mapping = {string: get_alphabet_key(i) for i, string in enumerate(string_list)}
       return mapping
 
-    def import_providers(filePath):
+    def import_providers_json(filePath):
       providers = {}
+      with open(filePath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
 
-      with open(filePath, 'r') as file:
-        next(file) # skip the header
-        for line in file:
-          if line.strip() == '' or line.startswith('#'):
-            continue
-          pCloudName = line.strip().split(",")[0].strip()
-          pName = line.strip().split(",")[1].strip()
-          pp = Provider(pName, pCloudName)
-          pp.regionAlias = line.strip().split(",")[2].strip()
-          pp.zone = line.strip().split(",")[3].strip()
-          pp.pType = line.strip().split(",")[4].strip()
-          pp.region = line.strip().split(",")[5].strip()
-          providers[pName] = pp
+      for item in data:
+        if not isinstance(item, dict):
+          continue
+        
+        # map JSON fields to the fields your code expects
+        platform = item.get('platform') 
+        pName = item.get('name')
+
+        pp = Provider(pName, platform)
+        pp.regionAlias = item.get('regionAlias', '')
+        pp.region = item.get('region', '')
+        pp.pType = item.get('pType', '')
+        pp.zone = item.get('zone', '')
+
+        providers[pName] = pp
 
       mapping = create_mapping(list(providers.keys()))
       mappingReverse = {value: key for key, value in mapping.items()}
-      
+      return providers, mapping, mappingReverse
+
+    def import_providers_k8s_json(filePath):
+      providers = {}
+      with open(filePath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+      items = data.get('items', []) if isinstance(data, dict) else []
+      for item in items:
+        if not isinstance(item, dict):
+          continue
+        # skip items that don't look like provider profiles
+        if 'spec' not in item:
+          continue
+
+        spec = item.get('spec', {})
+        meta = item.get('metadata', {})
+        labels = meta.get('labels', {})
+
+        # map JSON fields to the fields your code expects
+        pCloudName = spec.get('platform') or labels.get('skycluster.io/provider-platform', '') 
+        pName = meta.get('name') or spec.get('name') or pCloudName
+
+        pp = Provider(pName, pCloudName)
+        pp.regionAlias = spec.get('regionAlias', '')
+        pp.region = spec.get('region', '')
+        pp.pType = spec.get('platform', '')
+
+        # choose zone: prefer defaultZone, fall back to first zone, then label
+        zones = spec.get('zones', []) or item.get('status', {}).get('zones', [])
+        zone_name = ''
+        if zones:
+          for z in zones:
+            if z.get('defaultZone'):
+              zone_name = z.get('name') or z.get('locationName', '')
+              break
+          if not zone_name:
+            first = zones[0]
+            zone_name = first.get('name') or first.get('locationName', '')
+        if not zone_name:
+          zone_name = labels.get('skycluster.io/provider-zone', '')
+        pp.zone = zone_name
+
+        providers[pName] = pp
+
+      mapping = create_mapping(list(providers.keys()))
+      mappingReverse = {value: key for key, value in mapping.items()}
       return providers, mapping, mappingReverse
       
-    def import_prov_attributes(filePath):
+    def import_prov_attributes_json(filePath):
       visitedSourceNodes = []
       egressCosts = defaultdict(dict)
       pLatencies = defaultdict(dict)
       pEdges = []
 
       with open(filePath, 'r') as file:
-        next(file)
-        for line in file:
-          if line.strip() == '' or line.startswith('#'):
-            continue
-          pp = line.strip().split(',')[0].strip().strip('"').strip()
+        data = json.load(file)
+        for entry in data:
+          pp = entry.get('srcName').strip()
           
           if pp not in pLatencies:
               pLatencies[pp][pp] = 0
               egressCosts[pp][pp] = 0
               
-          dd = line.strip().split(',')[1].strip().strip('"').strip()
-          latency = line.strip().split(',')[2].strip().strip('"').strip()
-          eCost = line.strip().split(',')[3].strip().strip('"').strip()
+          dd = entry.get('dstName').strip()
+          latency = entry.get('latency')
+          eCost = entry.get('egressCost_dataRate')
       
           egressCosts[pp][dd] = eCost
           pLatencies[pp][dd] = latency
-          # TODO: Check for duplicate edges
+          
           pEdges.append((pp, dd, latency, eCost))
-      
+          
           # For each pp we need to have an edge from itself to itself, i.e. pp -> pp
           # So we use doubleEdgeInserted
           if pp not in visitedSourceNodes:
               pEdges.append((pp, pp, 0, 0))
               # pdag.add_edge(providers[pp], providers[pp], convert_to_ms("0ms"), 0)
               visitedSourceNodes.append(pp)  
+        
       return pEdges, pLatencies, egressCosts
       
-    def import_vservices(filePath):
+    def import_vservices_json(filePath):
       vservices = {}
-      # vsCosts = {}
-      # vsAvailCountDict = {}
       count = 0
 
       with open(filePath, 'r') as file:
-        next(file) # skip the header
-          # vs1:azurecanadaeastcloud,60
-        for line in file:
-          if line.strip() == '' or line.startswith('#'):
-            continue
-          vsName = line.strip().split(",")[0].strip()
-          vsProvider = line.strip().split(",")[1].strip()
-          vsCost = line.strip().split(",")[2].strip()
-          vsAvailability = line.strip().split(",")[3].strip()
+        data = json.load(file)
+        for entry in data:
+          vsName = entry.get('vservice_name').strip()
+          vsProvider = entry.get('provider_name').strip()
+          vsCost = entry.get('deploy_cost')
+          vsAvailability = entry.get('availability')
           # TODO: If the is a new vserivce we cate an object for it
           if vsName not in vservices:
             vservices[vsName] = VService(vsName)
             count += 1
-          # vsCosts[vsProvider] = vsCost
-          # vsAvailCountDict[vsProvider] = vsAvailability
           vservices[vsName].set_costs(vsProvider, vsCost)
           vservices[vsName].set_availCount(vsProvider, vsAvailability)
       return vservices
       
-    def import_tasks2(filePath, vservices):
-      # In this function, we assume tasks.csv only contains the vservices
-      # and a task can be appeared in multiple lines. Each line represents
-      # vservices that only one is required. 
-      # For example, a VM may required any flavor with at least 1 vCPU and 2GB ram
+    def import_tasks_locations2(filePath, vservices, providers):
       tasks = {}
       with open(filePath, 'r') as file:
-        next(file) # skip the header
-        for line in file:
-          if line.strip() == '' or line.startswith('#'):
-            continue
-          line = line.replace('"','')
-          # A task may be appeared in multiple lines
-          # Each line represents a set of vservices that only one is required
-          # taskName:vs1|5__vs2|1__vs3|2; # Either vs1 or vs2 or vs3 is required
-          # taskName:vs2|5; # vs2 required
-          tt = line.strip().split(",")[0].strip()
-          tt_apiVersion = line.strip().split(",")[1].strip()
-          tt_kind = line.strip().split(",")[2].strip()
-          if tt not in tasks:
-            task = Task2(tt, tt_apiVersion, tt_kind)
-            tasks[tt] = task
-          tt_vservices = line.split(",")[3].strip().split("__")
-          # The logical OR operator is used for the vservices
-          if len(tt_vservices) > 0 and tt_vservices[0].strip() != '':
-            taskVS = []
-            for vs in tt_vservices:
-              vs_key = vs.split('|')[0].strip('"').strip()
-              vs_num = vs.split('|')[1].strip('"').strip()
-              taskVS.append((vservices[vs_key], vs_num))
-            tasks[tt].add_vservice(taskVS)
-      return tasks
-
-    def import_tasks_locations2(filePath, tasks, providers):
-      with open(filePath, 'r') as file:
-        next(file) # skip the header
-        for line in file:
-          if line.strip() == '' or line.startswith('#'):
-            continue
-          data = json.loads(line.strip())
-          
-          tt = data['nameType']
-          if tt not in tasks:
-            task = Task2(tt)
-            tasks[tt] = task
-          
-          tt_perLocData = json.loads(data['permitted'])
-          if 'allOf' not in  tt_perLocData or len(tt_perLocData['allOf']) == 0:
-            # if there is no constraint then we let all providers to be included
-            for p, pp in providers.items():
-              tasks[tt].permittedLocData[p] = pp
-          else:
-            for key, value in tt_perLocData.items():
-              # key is 'allOf' and value is a list
-              for locReq in value:
-                for p, pp in filter_providers2(providers, locReq).items():
+          data = json.load(file)
+          for entry in data:
+            tt = entry['task']
+            apiVersion = entry.get('apiVersion', '')
+            kind = entry.get('kind', '')
+            if tt not in tasks:
+              task = Task2(tt, apiVersion, kind)
+              tasks[tt] = task
+            else:
+              print(f"Warning: Task {tt} already exists. Updating its location data.")
+            
+            tt_vservices_group = entry.get('requestedVServices', [])
+            # The logical OR operator is used for the vservices
+            if len(tt_vservices_group) > 0:
+              taskVS = []
+              for vs_gr in tt_vservices_group:
+                for vs in vs_gr:
+                  vs_name = vs.get('name', '').strip()
+                  vs_kind = vs.get('kind', '').strip()
+                  vs_num = str(vs.get('count', '1')).strip()
+                taskVS.append((vservices[vs_name], vs_num))
+              tasks[tt].add_vservice(taskVS)
+            
+            tt_perLocData = entry.get('permittedLocations', [])
+            if len(tt_perLocData) == 0:
+              print(f"Info: Task {tt} has no permitted location constraints. Allowing all providers.")
+              # if there is no constraint then we let all providers to be included
+              for p, pp in providers.items():
+                tasks[tt].permittedLocData[p] = pp
+            else:
+              for loc in tt_perLocData:
+                for p, pp in filter_providers2(providers, loc).items():
                   tasks[tt].permittedLocData[p] = pp
-              
-          tt_reqLocData = json.loads(data['required'])
-          for key, value in tt_reqLocData.items():
-            # key is 'allOf' and value is a list
-            for locReq in value:
-              for locKey, locValue in locReq.items():
-                if locKey == "anyOf":
-                  # locValue is a list
-                  # When anyOf is used, at least one provider in the list can be selected.
-                  # and not all of them need to be selected. So we create a union of all the providers
-                  # specified here and add them as a list of dict, so we treat them as a group of 
-                  # providers that at least one of them should be selected.
-                  filteredProviderDict = {}
-                  for anyV in locValue:
-                    # anyK is 'providerRef' and anyV is a dict
-                    for p, pp in filter_providers2(providers, anyV).items():
-                      # we only accept the provider if it is already in the permitted List
-                      if p in tasks[tt].permittedLocData or len(tasks[tt].permittedLocData) == 0:
-                        filteredProviderDict[p] = pp
-                  tasks[tt].requiredLocData.append(list(filteredProviderDict.values()))
-                elif locKey == "providerRef":
-                  for p, pp in filter_providers2(providers, locValue).items():
-                    if p in tasks[tt].permittedLocData or len(tasks[tt].permittedLocData) == 0:
-                      tasks[tt].requiredLocData.append(pp)
-                else:
-                  raise ValueError(f"Unknown key {locKey} in required location data")
                 
-          tasks[tt].maxReplicaNum = int(data['maxReplicas'])
+            tt_reqLocData = entry.get('requiredLocations', [])
+            # groups of required location data are combined with AND operator
+            for gr in tt_reqLocData:
+              # any of the locations in the list group can realize the requirement
+              # and not all of them need to be selected. So we create a union of all the providers
+              # specified here and add them as a list of dict, so we treat them as a group of 
+              # providers that at least one of them should be selected.
+              filteredProviderDict = {}
+              for loc in gr:
+                for p, pp in filter_providers2(providers, loc).items():
+                  # we only accept the provider if it is already in the permitted List
+                  if p in tasks[tt].permittedLocData or len(tasks[tt].permittedLocData) == 0:
+                    filteredProviderDict[p] = pp
+              tasks[tt].requiredLocData.append(list(filteredProviderDict.values()))
+
+            tasks[tt].maxReplicaNum = int(entry.get('maxReplicaNum', -1))
       return tasks
       
-    def import_tasks_edges(filePath):
+    def import_tasks_edges_json(filePath):
       tEdges = []
       with open(filePath, 'r') as file:
-        next(file)
-        for line in file:
-          if line.startswith('#'):
-            continue
-          ss = line.strip().split(',')[0].strip().strip('"').strip()
-          tt = line.strip().split(',')[1].strip().strip('"').strip()
-          latency = line.strip().split(',')[2].strip().strip('"').strip()
-          dataRate = line.strip().split(',')[3].strip().strip('"').strip()
+        data = json.load(file)
+        for entry in data:
+          ss = entry.get('srcTask').strip()
+          tt = entry.get('dstTask').strip()
+          latency = entry.get('latency')
+          dataRate = entry.get('dataRate')
           tEdges.append((ss, tt, latency, dataRate))
       return tEdges
+
+    class Dag:
+      def __init__(self):
+        self.nodes = []
+        self.name = None
+        self.edgeLatencies = {}
+        self.egressCost = {} # also used for dataRate
+        import networkx as nx
+        self.graph = nx.DiGraph()
+        self.location = {}
+
+      def add(self, n):
+        self.graph.add_node(n)
+        self.nodes.append(n)
+
+      def remove(self, n):
+        self.nodes.remove(n)
+        self.graph.remove_node(n)
+        
+      def add_edge(self, op1, op2, latency=0, egressCost=0):
+        assert op1 in self.graph.nodes
+        assert op2 in self.graph.nodes
+        self.graph.add_edge(op1, op2)
+        if not op1.name in self.edgeLatencies:
+          self.edgeLatencies[op1.name] = {}
+        self.edgeLatencies[op1.name][op2.name] = latency
+        if not op1.name in self.egressCost:
+          self.egressCost[op1.name] = {}
+        self.egressCost[op1.name][op2.name] = 0 if egressCost is None else egressCost
+
+      def get_graph(self):
+        return self.graph
+
+      def get_nodes(self):
+        return self.nodes
+
+      def get_edges(self):
+        return self.graph.edges
+
+    class ReplicatedTask:
+      def __init__(self, name, node, num=None):
+        self.name = name
+        self.task = node  # node itself
+        self.replicaNum = 1 if num is None else num
+        self.pName = None
+        self.pRegion = None
+
+    def build_replicated_task_graph(outputPath, providers, tasks, c, y, mapping, mappingRev):
+      depTaskDag = Dag()
+      # mapping from task name to the provider to the replicated task name
+      # taskName -> {providerName -> replicatedTaskName}
+      replicatedNodes = defaultdict(dict) 
+      for tname, cv in c.items():
+        iReplicCount = 1
+        for u, v in cv.items():
+          if v.varValue:
+            pp = providers[mappingRev[u]]
+            tt = ReplicatedTask(f"{tname}_{iReplicCount}", tasks[tname], iReplicCount)
+            tt.pName = pp.name
+            tt.pRegion = f'{pp.region}\n{pp.pType}'
+            replicatedNodes[tname][mappingRev[u]] = tt
+            # print(f"Node {tname} _{iReplicCount}\t{u}\t{pp.name}")
+            depTaskDag.add(tt)
+            
+      for iName, y_i in y.items():
+        # print(iName)
+        for jName, y_ij in y_i.items():
+          # print(f' -> {jName}')
+          for uvName, l in y_ij.items():
+            if l.varValue:
+              t1_name, t2_name = uvName.split('|')[0].split(',')[0], uvName.split('|')[0].split(',')[1]
+              t1_locRev, t2_locRev = uvName.split('|')[1].split(',')[0], uvName.split('|')[1].split(',')[1]
+              t1_loc, t2_loc = mappingRev[t1_locRev], mappingRev[t2_locRev]
+              # print(f'   {t1_name}({t1_loc}), {t2_name}({t2_loc}) = {l.varValue}')
+              depTaskDag.add_edge(replicatedNodes[t1_name][t1_loc], replicatedNodes[t2_name][t2_loc], 0, 0)
+              
+      for ss, tt in depTaskDag.get_edges():
+        # print(f"{ss.task.name} -> {tt.task.name}")
+        ss_task_name, tt_task_name = ss.task.name, tt.task.name
+        ss_pName, tt_pName = ss.pName, tt.pName
+        depTaskDag.add_edge(replicatedNodes[ss_task_name][ss_pName], replicatedNodes[tt_task_name][tt_pName], 1, 1)
+        
+      return depTaskDag
+
+      # allRegions = set([n.pRegion for n in depTaskDag.get_nodes()])
+      # colorMap = {v: plt.cm.tab20(i) for i, v in enumerate(allRegions)}
+      # nodeColors = [colorMap[n.pRegion] for n in depTaskDag.get_nodes()]
+      # nodeLabels = {n:f'{n.name}\n{n.pRegion}' for n in depTaskDag.graph.nodes()}
+      
+      # draw_this_graph(
+      #   depTaskDag.get_graph(), outputPath, f"result_graph_T{len(tasks)}", 
+      #   nodeLabels=nodeLabels , fontSizes=7, nodeColors=nodeColors, 
+      #   nodeSize=2000, spring_k=2.5)
+
+    def dump_json(outputPath, fileName, providers, c, y, mappingRev, tasks):
+      deployPlan = {}
+      deployPlan['components'] = []
+      for tname, cv in c.items():
+        iReplicCount = 1
+        for u, v in cv.items():
+          if v.varValue:
+            pp = providers[mappingRev[u]]
+            # The name of the component is composed of Name.Kind which we need 
+            # to keep only the name without the ".Kind" part
+            tt_dict = {
+              'componentRef': {
+                'name': f'{tname.replace("."+(tasks[tname].kind).lower(), "")}', 
+                'kind': f'{tasks[tname].kind}', 
+                'apiVersion': f'{tasks[tname].apiVersion}', 
+              },
+              'providerRef': {
+                'providerName': f'{pp.name}', 
+                'providerPlatform': f'{pp.platform}',
+                'providerRegion': f'{pp.region}', 
+                'providerZone': f'{pp.zone}',
+                'providerType': f'{pp.pType}',
+                'providerRegionAlias': f'{pp.regionAlias}',
+              },
+            }
+            deployPlan['components'].append(tt_dict) 
+            
+      deployPlan['edges'] = []
+      for iName, y_i in y.items():
+        # print(iName)
+        for jName, y_ij in y_i.items():
+          # print(f' -> {jName}')
+          for uvName, l in y_ij.items():
+            if l.varValue:
+              t1_name, t2_name = uvName.split('|')[0].split(',')[0], uvName.split('|')[0].split(',')[1]
+              t1_locRev, t2_locRev = uvName.split('|')[1].split(',')[0], uvName.split('|')[1].split(',')[1]
+              t1_loc, t2_loc = mappingRev[t1_locRev], mappingRev[t2_locRev]
+              t1_p, t2_p = providers[t1_loc], providers[t2_loc]
+              # The name of the component is composed of Name.Kind which we need 
+              # to keep only the name without the ".Kind" part
+              conn = {
+                'from': {
+                  'componentRef': {
+                    'name': f'{t1_name.replace("."+(tasks[t1_name].kind).lower(), "")}', 
+                    'kind': f'{tasks[t1_name].kind}', 
+                    'apiVersion': f'{tasks[t1_name].apiVersion}', 
+                  },
+                  'providerRef': {
+                    'providerName': f'{t1_p.name}', 
+                    'providerPlatform': f'{pp.platform}',
+                    'providerRegion': f'{t1_p.region}', 
+                    'providerZone': f'{t1_p.zone}', 
+                    'providerType': f'{t1_p.pType}', 
+                    'providerRegionAlias': f'{t1_p.regionAlias}'
+                  }
+                },
+                'to': {
+                  'componentRef': {
+                    'name': f'{t2_name.replace("."+tasks[t2_name].kind, "")}', 
+                    'kind': f'{tasks[t2_name].kind}', 
+                    'apiVersion': f'{tasks[t2_name].apiVersion}', 
+                  },
+                  'providerRef': {
+                    'providerName': f'{t2_p.name}', 
+                    'providerPlatform': f'{t2_p.platform}',
+                    'providerRegion': f'{t2_p.region}', 
+                    'providerZone': f'{t2_p.zone}', 
+                    'providerType': f'{t2_p.pType}', 
+                    'providerRegionAlias': f'{t2_p.regionAlias}'
+                  }
+                },
+                'latency': f'{l.varValue}'
+              }
+              deployPlan['edges'].append(conn)
+      # ensure traling slash after outputPath
+
+      outputFilePath = outputPath + "/" + fileName
+      with open(outputFilePath, 'w') as f:
+        # json.dump(deployPlan, f)
+        json.dump(deployPlan, f, indent=2)
+
   module_optimization.py: |
     import pulp
     from utils import convert_to_ms, convert_to_GB
@@ -853,7 +999,11 @@ data:
                 msg = f'WARNING: Location information is not valid. Required locations should be a subset of permitted locations.'
                 print(f'c[{tName}]: {c[tName]}, u: {mapping[u.name]}')
                 raise Exception(msg)
-              prob += c[tName][mapping[u.name]] == 1
+              # TODO: verify this
+              c[tName][mapping[u.name]].setInitialValue(1)
+              c[tName][mapping[u.name]].fixValue()
+              # Alternatively, we can use the following line
+              # prob += c[tName][mapping[u.name]] == 1
             # print(f"Set {tName},{mapping[u]} == 1")
       return prob
 
@@ -867,7 +1017,7 @@ data:
             # vs is not offered by p
             u_vs_avail[mapping[pName]][vsName] = 0
           else:
-            avail = int(vs.availCountDict[pName].strip('"'))
+            avail = int(vs.availCountDict[pName])
             if avail == -1:
               # unlimited resources
               u_vs_avail[mapping[pName]][vsName] = 10**6
@@ -963,14 +1113,18 @@ data:
         # break
       return prob
 
-    def optimize_solve(prob):
+    def optimize_solve(prob, warmStart=False):
       # Solve the optimization problem
       print("Solving the optimization problem...")
-      solver = pulp.PULP_CBC_CMD(msg=0)
+      import multiprocessing; 
+      num_threads = multiprocessing.cpu_count()
+      # all of out machines are 48 coures
+      num_threads = num_threads-2 # leave some cores free
+      solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=1200, threads=num_threads, warmStart=warmStart) # msg=1 to see the output
       prob.solve(solver)
       return prob
       
-    def run_optimization(providers, pLatencies, egressCosts, tasks, tEdges, vservices, mapping):
+    def run_optimization(providers, pLatencies, egressCosts, tasks, tEdges, vservices, mapping, init_solution=None):
       print(f'==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ')
       print(f'Creating decision variables...')
       prob, c, y = decision_variables(tasks, mapping, tEdges)
@@ -978,339 +1132,91 @@ data:
       print("Creating the objective function...")  
       prob = objectives(prob, tasks, c, y, tEdges, pLatencies, egressCosts, mapping, providers)  
       
+      warm_start = False
+      if init_solution is not None:
+        print("Adding initial solution...")
+        warm_start = True
+        for tName, uName in init_solution.items():
+          if tName in c and uName in c[tName]:
+            c[tName][uName].setInitialValue(1)
+      
       # Formulate the constraints.
       prob = constraints_deployments(prob, tasks, c)
       prob = constraints_linearization(prob, tasks, tEdges, y, c, pLatencies, mapping)
       prob = constraints_required_locations(prob, tasks, c, mapping)
       prob = constraints_resources(prob, providers, vservices, tasks, c, mapping)
       prob = constraints_edges(prob, tasks, tEdges, c, pLatencies, mapping)
-      
-      prob = optimize_solve(prob)
-      
-      return pulp.LpStatus[prob.status], prob, c, y      
-  module_csv_prepration.py: |
-    from collections import defaultdict
-    import json
-    
-    def cloud_cloud_latency(region1, region2):
-      latency_matrix = {
-        "us-west": {
-            "us-west": 0, "us-north-central": 30, "us-south-central": 40, "us-north-east": 60, "us-east": 70,
-            "ca-central": 50, "ca-east": 80,
-            "eu-central": 120, "af-north": 240, "asia-east": 150
-        },
-        "us-north-central": {
-            "us-west": 30, "us-north-central": 0, "us-south-central": 20, "us-north-east": 30, "us-east": 40,
-            "ca-central": 30, "ca-east": 60,
-            "eu-central": 90, "af-north": 210, "asia-east": 180
-        },
-        "us-south-central": {
-            "us-west": 40, "us-north-central": 20, "us-south-central": 0, "us-north-east": 40, "us-east": 50,
-            "ca-central": 40, "ca-east": 70,
-            "eu-central": 100, "af-north": 220, "asia-east": 190
-        },
-        "us-north-east": {
-            "us-west": 60, "us-north-central": 30, "us-south-central": 40, "us-north-east": 0, "us-east": 20,
-            "ca-central": 30, "ca-east": 30,
-            "eu-central": 90, "af-north": 210, "asia-east": 180
-        },
-        "us-east": {
-            "us-west": 70, "us-north-central": 40, "us-south-central": 50, "us-north-east": 20, "us-east": 0,
-            "ca-central": 40, "ca-east": 20,
-            "eu-central": 90, "af-north": 200, "asia-east": 190
-        },
-        "ca-central": {
-            "us-west": 50, "us-north-central": 30, "us-south-central": 40, "us-north-east": 30, "us-east": 40,
-            "ca-central": 0, "ca-east": 30,
-            "eu-central": 100, "af-north": 220, "asia-east": 190
-        },
-        "ca-east": {
-            "us-west": 80, "us-north-central": 60, "us-south-central": 70, "us-north-east": 30, "us-east": 20,
-            "ca-central": 30, "ca-east": 0,
-            "eu-central": 90, "af-north": 200, "asia-east": 190
-        },
-        "eu-central": {
-            "us-west": 120, "us-north-central": 90, "us-south-central": 100, "us-north-east": 90, "us-east": 90,
-            "ca-central": 100, "ca-east": 90,
-            "eu-central": 0, "af-north": 150, "asia-east": 180
-        },
-        "af-north": {
-            "us-west": 240, "us-north-central": 210, "us-south-central": 220, "us-north-east": 210, "us-east": 200,
-            "ca-central": 220, "ca-east": 200,
-            "eu-central": 150, "af-north": 0, "asia-east": 270
-        },
-        "asia-east": {
-            "us-west": 150, "us-north-central": 180, "us-south-central": 190, "us-north-east": 180, "us-east": 190,
-            "ca-central": 190, "ca-east": 190,
-            "eu-central": 180, "af-north": 270, "asia-east": 0
-        }
-      }
 
-      # we consider scinet and vaughan as ca-central
-      if region1 == "scinet" or region1 == "vaughan":
-        region1 = "ca-central"
-      if region2 == "scinet" or region2 == "vaughan":
-        region2 = "ca-central"
-      # consider us-central as us-north-central
-      if region1 == "us-central":
-        region1 = "us-north-central"
-      if region2 == "us-central":
-        region2 = "us-north-central"
-      return latency_matrix.get(region1, {}).get(region2, None)
+      prob = optimize_solve(prob, warmStart=warm_start)
 
-    def custom_latency(latencyData, loc1, loc2):
-      loc1, loc2 = loc1.lower(), loc2.lower()
-      key1 = f"{loc1}.{loc2}"
-      key2 = f"{loc2}.{loc1}"
-      return float(latencyData.get(key1) or latencyData.get(key2) or -1)
+      return pulp.LpStatus[prob.status], prob, c, y
 
-    def get_latency(latencyData, region1, region2, loc1, loc2):
-      latency = custom_latency(latencyData, loc1, loc2)
-      if latency != -1:
-        return round(latency, 2)
-      region1, region2 = region1.lower(), region2.lower()
-      if region1 == region2: 
-        return 35
-      latency = cloud_cloud_latency(region1, region2)
-      if latency is None:
-        raise ValueError("Unsupported region", region1, region2, loc1, loc2)
-      return round(latency, 2)
-
-    def write_providers_csv(providers, filename):
-      with open(filename, 'w') as f:
-        f.write(f"# header\n")
-        for provider in providers['items']:
-          providerName = provider['metadata']['name']
-          pLabels = provider['metadata']['labels']
-          pCloudName = pLabels['skycluster.io/provider-name']
-          pRegionAlias = pLabels['skycluster.io/provider-region-alias']
-          pRegion = pLabels['skycluster.io/provider-region']
-          pZone = pLabels['skycluster.io/provider-zone']
-          pType = pLabels['skycluster.io/provider-type']
-          if pType == 'global' or pZone == 'global':
-            continue
-          f.write(f"{pCloudName}, {providerName}, {pRegionAlias}, {pZone}, {pType}, {pRegion}\n")
-
-    def write_provider_attr_csv(providers, provider_latencies, filename):
-      providerAttr = defaultdict(dict)
-      providerAttr_json = filename.replace('.csv', '.json')
-      with open(filename, 'w') as f:
-        f.write(f"# header\n")
-        for provider in providers['items']:
-          providerName = provider['metadata']['name']
-          pLabels = provider['metadata']['labels']
-          pZone = pLabels['skycluster.io/provider-zone']
-          pCloudName = pLabels['skycluster.io/provider-name']
-          pContinent = pLabels['skycluster.io/provider-continent']
-          pType = pLabels['skycluster.io/provider-type']
-          pLocName = pLabels['skycluster.io/provider-loc-name']
-          pRegion = pLabels['skycluster.io/provider-region']
-          pRegionAlias = pLabels['skycluster.io/provider-region-alias']
-          pData = provider['data']
-          if pType == 'global' or pZone == 'global':
-            continue
-          # Currently only wre support transferring through the internet
-          # so price of data transfer to internet will be set for sending traffic
-          # from the current provider to all other providers
-          
-          for pDst in providers['items']:
-            pDstName = pDst['metadata']['name']
-            pDstCloudName = pDst['metadata']['labels']['skycluster.io/provider-name']
-            pDstType = pDst['metadata']['labels']['skycluster.io/provider-type']
-            pDstContinent = pLabels['skycluster.io/provider-continent']
-            pDstLocName = pDst['metadata']['labels']['skycluster.io/provider-loc-name']
-            pDstRegion = pDst['metadata']['labels']['skycluster.io/provider-region']
-            pDstRegionAlias = pDst['metadata']['labels']['skycluster.io/provider-region-alias']
-            pDstZone = pDst['metadata']['labels']['skycluster.io/provider-zone']
-            transferCosts = 0
-            if provider == pDst or pDstType == 'global':
-              continue
-            # if data transfer is between two providers of the same type, region and zone
-            # the cost is 0, but with different regions, or zones,
-            # we will set the transfer cost to 0.02 (aws reference)
-            # if data transfer is between two providers of different types 
-            # we use the transfer cost to the internet
-            if pCloudName == pDstCloudName and pRegion == pDstRegion and pZone == pDstZone:
-              transferCosts = 0
-            elif pCloudName == pDstCloudName:
-              transferCosts = 0.02
-            elif 'egressDataTransfer-internet' not in pData:
-              transferCosts = 0
-            else:
-              transferCosts = pData['egressDataTransfer-internet']
-            # TODO: We calculate latency automatically, but in the beginning we will set it manually
-            latency = get_latency(provider_latencies, pRegionAlias, pDstRegionAlias, pLocName, pDstLocName)
-            if latency is None:
-              raise ValueError("Unsupported region", providerName, pDstName, pRegionAlias, pDstRegionAlias, pType, pDstType, pLocName, pDstLocName)
-            providerAttr[providerName][pDstName] = {
-              'latency': latency,
-              'transferCosts': transferCosts
-            }
-            f.write(f"{providerName}, {pDstName}, {latency}, {transferCosts}\n")
-      with open(providerAttr_json, 'w') as f:
-        f.write(json.dumps(providerAttr))
-              
-    def write_vservices_csv(providers, offerings, filename):
-      enabledProviders = []
-      for provider in providers['items']:
-        pLabels = provider['metadata']['labels']
-        providerName = provider['metadata']['name']
-        pName = pLabels['skycluster.io/provider-name']
-        pRegion = pLabels['skycluster.io/provider-region']
-        pZone = pLabels['skycluster.io/provider-zone']
-        pType = pLabels['skycluster.io/provider-type']
-        pId = f"{pName}.{pRegion}.{pZone}.{pType}"
-        enabledProviders.append(pId)
-
-      with open(filename, 'w') as f:
-        f.write(f"# header\n")
-        for vservices in offerings['items']:
-          labels = vservices['metadata']['labels']
-          pName = labels['skycluster.io/provider-name']
-          pRegion = labels['skycluster.io/provider-region']
-          pZone = labels['skycluster.io/provider-zone']
-          pType = labels['skycluster.io/provider-type']
-          pId = f"{pName}.{pRegion}.{pZone}.{pType}"
-          if pId not in enabledProviders:
-            continue
-          for vservice, price in vservices['data'].items():
-            f.write(f"{vservice}, {pName}.{pRegion}.{pZone}.{pType}, {price}, -1\n")
-
-    def filterEnabledProviders(providers):
-      items = []
-      enabledProvidersRegion = []
-      for provider in providers['items']:
-        pLabels = provider['metadata']['labels']
-        pType = pLabels['skycluster.io/provider-type']
-        if pType != 'global':
-          continue
-        
-        if "skycluster.io/provider-enabled" not in pLabels:
-          print(f"WARNING: provider {provider['metadata']['name']} does not have the label skycluster.io/provider-enabled")
-        pEnabled = pLabels['skycluster.io/provider-enabled']
-        providerName = pLabels['skycluster.io/provider-name']
-        pRegion = pLabels['skycluster.io/provider-region']
-        pId = f"{providerName}.{pRegion}"
-        if pEnabled == 'false':
-          continue
-        enabledProvidersRegion.append(pId)
-
-      for provider in providers['items']:
-        pLabels = provider['metadata']['labels']
-        pType = pLabels['skycluster.io/provider-type']
-        if pType == 'global':
-          continue
-        providerName = pLabels['skycluster.io/provider-name']
-        if "skycluster.io/provider-enabled" not in pLabels:
-          print(f"WARNING: provider {provider['metadata']['name']} does not have the label skycluster.io/provider-enabled")
-        pEnabled = pLabels['skycluster.io/provider-enabled']
-        pRegion = pLabels['skycluster.io/provider-region']
-        pZone = pLabels['skycluster.io/provider-zone']
-        pIdRegion = f"{providerName}.{pRegion}"
-        pId = f"{providerName}.{pRegion}.{pZone}.{pType}"
-        if pIdRegion not in enabledProvidersRegion:
-          # if the provider is not enabled, then we skip it
-          continue
-        if pEnabled == 'false':
-          continue
-        items.append(provider)
-
-      return {'items': items}
-  csv_prepration.py: |
-    import os
-    import module_csv_prepration as dp
-    import json
-
-    print("Starting the data prepration setup...")
-    # check if the file exists
-    csvFiles = [
-      '/shared/providers.json', 
-      '/shared/offerings.json', 
-      '/shared/provider-latencies.json', 
-    ]
-
-    for file in csvFiles:
-      if not os.path.exists(file):
-        print(f"File {file} does not exist.")
-        exit(1)
-
-    # print list of files avaialbe on the disk
-    print(os.listdir('/shared'))
-    
-    provider_latencies = {}
-    with open('/shared/provider-latencies.json', 'r') as f:
-      json_str = f.read()
-      provider_latencies = json.loads(json_str)  
-
-    with open('/shared/providers.json', 'r') as f:
-      json_str = f.read()
-      providers_json = json.loads(json_str)  
-      enabledProviders = dp.filterEnabledProviders(providers_json)
-      dp.write_providers_csv(enabledProviders, '/shared/providers.csv')
-      dp.write_provider_attr_csv(enabledProviders, provider_latencies, '/shared/providers-attr.csv')
-      print("done writing providers.csv and providers-attr.csv")
-
-      with open('/shared/offerings.json', 'r') as f:
-        json_str = f.read()
-        offerings_json = json.loads(json_str)  
-        dp.write_vservices_csv(enabledProviders, offerings_json, '/shared/vservices.csv')
-      print("done writing vservices.csv")
   call_optimization.py: |
     import os
-    from utils import check_dir_exists
-    from module_optimization import run_optimization
-    import module_data as dg
     import time
     import tracemalloc
-    import json
+    from utils import check_dir_exists, greedy_with_beam
+    import module_data as dt
+    from module_optimization import run_optimization
     
-    def optimize(projectPath, providerFileName, provAttrFileName, vServicesFileName, taskFileName, taskLocationFileName, taskEdgeFileName, note="", **kwargs):
-      print("Reading the data...")
-      
-      thisFile = projectPath +  providerFileName
+    def optimize(projectPath, note="", **kwargs):
+      providerFileName = "providers.json"
+      provAttrFileName = "providers-attr.json"
+      vServicesFileName = "virtual-services.json"
+      taskFileName = "tasks.json"
+      taskEdgeFileName = "tasks-edges.json"
+
+      print("Reading the providers...")
+      thisFile = projectPath + providerFileName
       check_dir_exists(thisFile)
-      print(f"Reading the providers... {thisFile}")
-      providers, mapping, mappingRev = dg.import_providers(thisFile)
-      if len(providers) == 0:
-        print("No providers found. Exiting...")
-        exit(1)
-      
-      thisFile = projectPath +  provAttrFileName
+      providers, mapping, mappingRev = dt.import_providers_json(thisFile)
+      print(f"Providers: {len(providers)}")
+
+      print("Reading the provider attributes...")
+      thisFile = projectPath + provAttrFileName
       check_dir_exists(thisFile)
-      print(f"Reading the provider attributes... {thisFile}")
-      pEdges, pLatencies, egressCosts = dg.import_prov_attributes(thisFile)
-      
-      thisFile = projectPath +  vServicesFileName
+      pEdges, pLatencies, egressCosts = dt.import_prov_attributes_json(thisFile)
+      print(f"Provider attributes read. Total {len(pEdges)} edges.")
+
+      print("Reading the vservices...")
+      thisFile = projectPath + vServicesFileName
       check_dir_exists(thisFile)
-      print(f"Reading the vservices... {thisFile}")
-      vServices = dg.import_vservices(thisFile)
-      if len(vServices) == 0:
-        print("No virtual services found")
-        exit(1)
-      
+      vServices = dt.import_vservices_json(thisFile)
+      print(f"VServices read. Total {len(vServices)} vServices.")
+
       print("Reading the tasks...")
-      thisFile = projectPath +  taskFileName
+      thisFile = projectPath + taskFileName
       check_dir_exists(thisFile)
-      tasks = dg.import_tasks2(thisFile, vServices)
-      if len(tasks) == 0:
-        print("No tasks found")
-        exit(1)
-      
-      print("Reading the tasks locations...")
-      thisFile = projectPath +  taskLocationFileName
+      tasks = dt.import_tasks_locations2(thisFile, vServices, providers)
+      print(f"Tasks read. Total {len(tasks)} tasks.")
+
+      thisFile = projectPath + taskEdgeFileName
       check_dir_exists(thisFile)
-      tasks = dg.import_tasks_locations2(thisFile, tasks, providers)
-        
-      thisFile = projectPath +  taskEdgeFileName
-      check_dir_exists(thisFile)
-      tasksEdges = dg.import_tasks_edges(thisFile)
+      tasksEdges = dt.import_tasks_edges_json(thisFile)
+      print(f"Tasks edges read. Total {len(tasksEdges)} edges.")
+
+      print(f"Providers: {len(providers)}")
+      print(f"Tasks: {len(tasks)}")
+      print(f"Permitted Locations: {[len(t.permittedLocData) for t in tasks.values()]}")
+      print(f"VServices: {len(vServices)}")
+      print(f"Provider Edges: {len(pEdges)}")
+      print(f"Tasks Edges: {len(tasksEdges)}")
+      print(f"pLatencies: {len(pLatencies)}")
+      print(f"egressCosts: {len(egressCosts)}")
+
+      re, costs, eds = greedy_with_beam(tasks, providers, tasksEdges, pEdges, vServices, providers, top_k=20)
+      if re is None:
+          print("No feasible solution found with beam search.")
+      else:
+          print("Greedy with beam search solution:")
+          print(f"Total estimated cost: {costs}")
       
       print("Starting the optimization...")
       start_time = time.time()
       tracemalloc.start()
       snapshotMain_start = tracemalloc.take_snapshot()
       status, prob, c, y = run_optimization(
-        providers, pLatencies, egressCosts, tasks, tasksEdges, vServices, mapping)
+        providers, pLatencies, egressCosts, tasks, tasksEdges, vServices, mapping, init_solution=re)
       snapshotMain_end = tracemalloc.take_snapshot()
       end_time = time.time()
       total_time = end_time - start_time
@@ -1360,20 +1266,19 @@ data:
         for u, v in cv.items():
           if v.varValue:
             pp = providers[mappingRev[u]]
-            # The name of the component is composed of Name.Kind which we need 
-            # to keep only the name without the ".Kind" part
             tt_dict = {
               'componentRef': {
-                'name': f'{tname.replace("."+(tasks[tname].kind).lower(), "")}', 
+                'name': f'{tname}', 
                 'kind': f'{tasks[tname].kind}', 
                 'apiVersion': f'{tasks[tname].apiVersion}', 
               },
               'providerRef': {
-                'providerName': f'{pp.name}', 
-                'providerRegion': f'{pp.region}', 
-                'providerZone': f'{pp.zone}',
-                'providerType': f'{pp.pType}',
-                'providerRegionAlias': f'{pp.regionAlias}',
+                'platform': f'{pp.platform}', 
+                'name': f'{pp.name}', 
+                'region': f'{pp.region}', 
+                'zone': f'{pp.zone}',
+                'type': f'{pp.pType}',
+                'regionAlias': f'{pp.regionAlias}',
               },
             }
             deployPlan['components'].append(tt_dict) 
@@ -1394,30 +1299,30 @@ data:
               conn = {
                 'from': {
                   'componentRef': {
-                    'name': f'{t1_name.replace("."+(tasks[t1_name].kind).lower(), "")}', 
+                    'name': f'{t1_name}', 
                     'kind': f'{tasks[t1_name].kind}', 
                     'apiVersion': f'{tasks[t1_name].apiVersion}', 
                   },
                   'providerRef': {
-                    'providerName': f'{t1_p.name}', 
-                    'providerRegion': f'{t1_p.region}', 
-                    'providerZone': f'{t1_p.zone}', 
-                    'providerType': f'{t1_p.pType}', 
-                    'providerRegionAlias': f'{t1_p.regionAlias}'
+                    'name': f'{t1_p.name}', 
+                    'region': f'{t1_p.region}', 
+                    'zone': f'{t1_p.zone}', 
+                    'type': f'{t1_p.pType}', 
+                    'regionAlias': f'{t1_p.regionAlias}'
                   }
                 },
                 'to': {
                   'componentRef': {
-                    'name': f'{t2_name.replace("."+(tasks[t2_name].kind).lower(), "")}', 
+                    'name': f'{t2_name.lower()}', 
                     'kind': f'{tasks[t2_name].kind}', 
                     'apiVersion': f'{tasks[t2_name].apiVersion}', 
                   },
                   'providerRef': {
-                    'providerName': f'{t2_p.name}', 
-                    'providerRegion': f'{t2_p.region}', 
-                    'providerZone': f'{t2_p.zone}', 
-                    'providerType': f'{t2_p.pType}', 
-                    'providerRegionAlias': f'{t2_p.regionAlias}'
+                    'name': f'{t2_p.name}', 
+                    'region': f'{t2_p.region}', 
+                    'zone': f'{t2_p.zone}', 
+                    'type': f'{t2_p.pType}', 
+                    'regionAlias': f'{t2_p.regionAlias}'
                   }
                 },
                 'latency': f'{l.varValue}'
@@ -1426,29 +1331,15 @@ data:
       # ensure traling slash after outputPath
 
       outputFilePath = outputPath + "/" + fileName
+      import json
       with open(outputFilePath, 'w') as f:
         json.dump(deployPlan, f)
         # json.dump(deployPlan, f, indent=2)
 
     print("satrt optimization")
-    INPUTS="/shared/"
-    PROVIDER_FILE="providers.csv"
-    PROVIDER_ATTR_FILE="providers-attr.csv"
-    VS_FILE="vservices.csv"
-    TASK_FILE="tasks.csv"
-    TASK_LOC_FILE="tasks-locations.csv"
-    TASK_EDGE_FILE="tasks-edges.csv"
     projPath = "/shared/"
     print(f"Reading from the directory: {projPath}")
-    optimize(
-      projPath, 
-      PROVIDER_FILE, 
-      PROVIDER_ATTR_FILE, 
-      VS_FILE, 
-      TASK_FILE, 
-      TASK_LOC_FILE, 
-      TASK_EDGE_FILE,
-    )
+    optimize(projPath)
     print("Optimization completed.")
 ---
 {{ end }}
