@@ -1,4 +1,4 @@
-{{ if or .Values.install }}
+{{ if or .Values.install .Values.test }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -105,6 +105,17 @@ data:
           #!/bin/bash
           echo "Setting iptables rules" >> /root/iptables-postrouting.log
 
+          max_retries=5
+          count=0
+          until apt-get update -qq && apt-get install -yq vim cron; do
+            count=$((count+1))
+            if [ "$count" -ge "$max_retries" ]; then
+              echo "Failed to install apt packages after $count attempts" >&2
+              exit 1
+            fi
+            sleep 3
+          done
+
           INTF_NAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
           IP_ADDR=$(ip -o -4 addr show "$INTF_NAME" | awk '{print $4}' | cut -d/ -f1)
 
@@ -155,6 +166,18 @@ data:
         content: |
           #!/bin/bash
           echo "I've been run" >> /root/tailscale-install.log
+
+          max_retries=5
+          count=0
+          until apt-get update -qq && apt-get install -yq vim cron; do
+            count=$((count+1))
+            if [ "$count" -ge "$max_retries" ]; then
+              echo "Failed to install apt packages after $count attempts" >&2
+              exit 1
+            fi
+            sleep 3
+          done
+
           # Function to install Tailscale
           install_tailscale() {
             wget -q -P /root https://tailscale.com/install.sh
