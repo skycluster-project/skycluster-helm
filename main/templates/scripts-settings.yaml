@@ -1,4 +1,4 @@
-{{ if or .Values.install }}
+{{ if or .Values.install .Values.test }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -670,4 +670,684 @@ data:
     echo "Done. Sleeping to stay alive..."
     sleep 3600
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provider-metadata-e2e
+  namespace: skycluster-system
+  labels:
+    skycluster.io/config-type: provider-metadata-e2e
+data:
+  gcp: |
+    - vpcCidr: 10.66.0.0/16
+      subnets:
+        - cidr: 10.66.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.67.0.0/16
+      subnets:
+        - cidr: 10.67.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.68.0.0/16
+      subnets:
+        - cidr: 10.68.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.69.0.0/16
+      subnets:
+        - cidr: 10.69.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.70.0.0/16
+      subnets:
+        - cidr: 10.70.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.71.0.0/16
+      subnets:
+        - cidr: 10.71.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.72.0.0/16
+      subnets:
+        - cidr: 10.72.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.73.0.0/16
+      subnets:
+        - cidr: 10.73.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.74.0.0/16
+      subnets:
+        - cidr: 10.74.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.75.0.0/16
+      subnets:
+        - cidr: 10.75.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.76.0.0/16
+      subnets:
+        - cidr: 10.76.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.77.0.0/16
+      subnets:
+        - cidr: 10.77.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.78.0.0/16
+      subnets:
+        - cidr: 10.78.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.79.0.0/16
+      subnets:
+        - cidr: 10.79.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.80.0.0/16
+      subnets:
+        - cidr: 10.80.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.81.0.0/16
+      subnets:
+        - cidr: 10.81.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.82.0.0/16
+      subnets:
+        - cidr: 10.82.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.83.0.0/16
+      subnets:
+        - cidr: 10.83.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.84.0.0/16
+      subnets:
+        - cidr: 10.84.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+    - vpcCidr: 10.85.0.0/16
+      subnets:
+        - cidr: 10.85.0.0/18
+      gateway:
+        flavor: 2vCPU-4GB
+  aws: |
+    - vpcCidr: 10.16.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.16.0.0/19
+        - type: private
+          cidr: 10.16.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.17.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.17.0.0/19
+        - type: private
+          cidr: 10.17.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.18.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.18.0.0/19
+        - type: private
+          cidr: 10.18.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.19.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.19.0.0/19
+        - type: private
+          cidr: 10.19.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.20.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.20.0.0/19
+        - type: private
+          cidr: 10.20.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.21.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.21.0.0/19
+        - type: private
+          cidr: 10.21.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.22.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.22.0.0/19
+        - type: private
+          cidr: 10.22.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.23.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.23.0.0/19
+        - type: private
+          cidr: 10.23.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.24.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.24.0.0/19
+        - type: private
+          cidr: 10.24.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.25.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.25.0.0/19
+        - type: private
+          cidr: 10.25.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.26.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.26.0.0/19
+        - type: private
+          cidr: 10.26.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.27.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.27.0.0/19
+        - type: private
+          cidr: 10.27.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.28.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.28.0.0/19
+        - type: private
+          cidr: 10.28.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.29.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.29.0.0/19
+        - type: private
+          cidr: 10.29.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.30.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.30.0.0/19
+        - type: private
+          cidr: 10.30.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.31.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.31.0.0/19
+        - type: private
+          cidr: 10.31.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.32.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.32.0.0/19
+        - type: private
+          cidr: 10.32.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.33.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.33.0.0/19
+        - type: private
+          cidr: 10.33.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.34.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.34.0.0/19
+        - type: private
+          cidr: 10.34.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.35.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.35.0.0/19
+        - type: private
+          cidr: 10.35.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.36.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.36.0.0/19
+        - type: private
+          cidr: 10.36.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.37.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.37.0.0/19
+        - type: private
+          cidr: 10.37.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.38.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.38.0.0/19
+        - type: private
+          cidr: 10.38.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.39.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.39.0.0/19
+        - type: private
+          cidr: 10.39.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.40.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.40.0.0/19
+        - type: private
+          cidr: 10.40.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.41.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.41.0.0/19
+        - type: private
+          cidr: 10.41.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.42.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.42.0.0/19
+        - type: private
+          cidr: 10.42.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.43.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.43.0.0/19
+        - type: private
+          cidr: 10.43.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.44.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.44.0.0/19
+        - type: private
+          cidr: 10.44.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.45.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.45.0.0/19
+        - type: private
+          cidr: 10.45.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.46.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.46.0.0/19
+        - type: private
+          cidr: 10.46.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.47.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.47.0.0/19
+        - type: private
+          cidr: 10.47.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.48.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.48.0.0/19
+        - type: private
+          cidr: 10.48.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.49.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.49.0.0/19
+        - type: private
+          cidr: 10.49.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.50.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.50.0.0/19
+        - type: private
+          cidr: 10.50.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.51.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.51.0.0/19
+        - type: private
+          cidr: 10.51.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.52.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.52.0.0/19
+        - type: private
+          cidr: 10.52.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.53.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.53.0.0/19
+        - type: private
+          cidr: 10.53.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.54.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.54.0.0/19
+        - type: private
+          cidr: 10.54.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.55.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.55.0.0/19
+        - type: private
+          cidr: 10.55.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.56.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.56.0.0/19
+        - type: private
+          cidr: 10.56.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.57.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.57.0.0/19
+        - type: private
+          cidr: 10.57.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.58.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.58.0.0/19
+        - type: private
+          cidr: 10.58.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.59.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.59.0.0/19
+        - type: private
+          cidr: 10.59.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.60.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.60.0.0/19
+        - type: private
+          cidr: 10.60.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.61.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.61.0.0/19
+        - type: private
+          cidr: 10.61.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.62.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.62.0.0/19
+        - type: private
+          cidr: 10.62.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.63.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.63.0.0/19
+        - type: private
+          cidr: 10.63.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.64.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.64.0.0/19
+        - type: private
+          cidr: 10.64.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+    - vpcCidr: 10.65.0.0/16
+      subnets:
+        - type: public
+          cidr: 10.65.0.0/19
+        - type: private
+          cidr: 10.65.32.0/19
+      gateway:
+        flavor: 4vCPU-8GB
+        volumeType: gp2
+        volumeSize: 30
+  openstack: |
+    - vpcCidr: 10.86.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.86.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.87.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.87.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.88.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.88.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.89.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.89.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.90.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.90.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.91.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.91.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.92.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.92.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.93.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.93.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.94.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.94.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
+
+    - vpcCidr: 10.95.0.0/17
+      subnets:
+        - default: True
+          cidr: 10.95.0.0/18
+      gateway:
+        flavor: 4vCPU-8GB
 {{ end }}
