@@ -899,12 +899,8 @@ data:
               # virtual service is offererd by u, so
               selectedService = min(svcCosts, key=lambda x: x[1])[0]
               # print(f"  {tName} service {selectedService[0].name}, offered by {u} with cost: {selectedService[0].get_costs()[u]}")
-              # The cost is typically is in the form of 0.001, 
-              # so we multiply it by 10**5 to get the cost as an integer
-              k_t_u[tName][mapping[u]] += int(float(selectedService[0].get_costs()[u])*(10**5)) * int(selectedService[1])
-            else:
-              # the service is not offered by u, so let's set the cost to something large enough
-              k_t_u[tName][mapping[u]] += (10**8) * int(e[1])
+              # Caution: the cost is typically is in the form of 0.001, 
+              k_t_u[tName][mapping[u]] += float(selectedService[0].get_costs()[u]) * float(selectedService[1])
               
       objective = 0
       deployCost = 0
@@ -920,8 +916,7 @@ data:
         # print(i,j,l,d)
         for u in tasks[i].permittedLocData:
           for v in tasks[j].permittedLocData:
-            # same as deploy cost, we multiply the cost by 10**5 to get an integer
-            objective += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] * int(d) * int(float(egressCosts[u][v])*(10**5)) * compare(float(l), float(pLatencies[u][v]))
+            objective += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] * d * float(egressCosts[u][v]) * compare(float(l), float(pLatencies[u][v]))
       prob += objective
       return prob
 
@@ -976,7 +971,7 @@ data:
       for tName, tt in tasks.items():
         # print(f"tName: {tName}, required: {tt.requiredLocData}")
         if len(tt.requiredLocData) == 0:
-          # print('No required locations. All permitted locations are included.')
+          print('No required locations. All permitted locations are included.')
           continue # we let all the options within permitted locations to be included
         else:
           # we let only subsets of permitted locations that include required locations
@@ -985,7 +980,7 @@ data:
           # force placement on at least one of the providers in the list
           for u in tt.requiredLocData:
             if isinstance(u, list):
-              # list of providers
+              # alternative list of providers
               groupLocation = 0
               for uu in u:
                 if mapping[uu.name] not in c[tName]:
@@ -993,18 +988,10 @@ data:
                   print(f'c[{tName}]: {c[tName]}, u: {mapping[uu.name]}')
                   raise Exception(msg)
                 groupLocation += c[tName][mapping[uu.name]]
+              # print(f'Setting at least one of {[uu.name for uu in u]} for task {tName}')
               prob += groupLocation >= 1
             else:
-              if mapping[u.name] not in c[tName]:
-                msg = f'WARNING: Location information is not valid. Required locations should be a subset of permitted locations.'
-                print(f'c[{tName}]: {c[tName]}, u: {mapping[u.name]}')
-                raise Exception(msg)
-              # TODO: verify this
-              c[tName][mapping[u.name]].setInitialValue(1)
-              c[tName][mapping[u.name]].fixValue()
-              # Alternatively, we can use the following line
-              # prob += c[tName][mapping[u.name]] == 1
-            # print(f"Set {tName},{mapping[u]} == 1")
+              raise Exception('Required location must be a list of providers or list of list of providers.')
       return prob
 
     def constraints_resources(prob, providers, vservices, tasks, c, mapping):
@@ -1020,7 +1007,7 @@ data:
             avail = int(vs.availCountDict[pName])
             if avail == -1:
               # unlimited resources
-              u_vs_avail[mapping[pName]][vsName] = 10**6
+              u_vs_avail[mapping[pName]][vsName] = 10**8
             else:
               u_vs_avail[mapping[pName]][vsName] = avail
           # print(f"u_vs_avail[{mapping[pName]}][{vsName}] = {u_vs_avail[mapping[pName]][vsName]}")
