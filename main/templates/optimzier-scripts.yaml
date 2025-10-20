@@ -267,13 +267,13 @@ data:
             # check capacity and cost on this provider
             svc_name = svc.name
             avail = capacities.get(svc_name, 0)
-            count = int(count)
+            count = float(count)
             if avail < count:
               continue
             unit_cost = services.get(svc_name, {}).costs.get(provider, None)
             if unit_cost is None:
               continue
-            unit_cost = int(unit_cost * (10**5))  # scale to avoid float issues
+            unit_cost = unit_cost
             cost = unit_cost * count
             if best_choice is None or cost < best_choice[0]:
               best_choice = (cost, svc_name, count)
@@ -292,11 +292,6 @@ data:
             break
 
         result[provider] = total_cost if feasible else math.inf
-
-      # return scaled back costs
-      for provider in result:
-        if result[provider] != math.inf:
-          result[provider] /= (10**5)
       return result
 
 
@@ -359,6 +354,7 @@ data:
       # pick best complete assignment
       best_assign, best_cost, best_used = min(beam, key=lambda x: x[1])
       return best_assign, best_cost, best_used
+
   module_data.py: |
     from collections import defaultdict
     import json
@@ -1226,9 +1222,9 @@ data:
       print(f"CPU time:\t{round(prob.solutionCpuTime, 4)}")
       open(projectPath + '/optimization-result.txt', 'w').write(status)
       if status != "Infeasible":
-        c_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('c_'))/(10**5)
-        y_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('y_'))/(10**5)
-        deployCost = prob.objective.value()/(10**5)
+        c_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('c_'))
+        y_objective = sum(v.varValue * prob.objective.get(v, 0) for v in prob.variables() if v.name.startswith('y_'))
+        deployCost = prob.objective.value()
         print(f"Objective value:\t${float(deployCost)}")
         print(f"Objective value (c):\t${float(c_objective)}")
         print(f"Objective value (y):\t${float(y_objective)}")
