@@ -51,6 +51,7 @@ data:
 
       if ! kubectl get configmap "$cm_name" -n "$ns" >/dev/null 2>&1; then
         echo " --> Creating ConfigMap ${cm_name} in namespace ${ns}..."
+        tmp=$(mktemp)
         kubectl create configmap "$cm_name" -n "$ns" \
           --from-literal="${cluster_name}=${result}" --dry-run=client -o yaml \
           | kubectl label --local -f - --overwrite \
@@ -59,8 +60,21 @@ data:
           "skycluster.io/result-type=${name}" \
           "skycluster.io/owner-uid=${owner_uid}" \
           --dry-run=client -o yaml \
-          | kubectl patch --local -f - --type merge -p "${owner_patch}" -o yaml \
-          | kubectl -n "$ns" apply -f -
+          | kubectl patch --local -f - --type merge -p "${owner_patch}" -o yaml  > "$tmp"
+          out=$(kubectl -n "$ns" apply -f "$tmp" 2>&1) || rc=$?
+          rc=${rc:-0}
+          if [ $rc -ne 0 ]; then
+            if printf '%s' "$out" | grep -qi 'AlreadyExists'; then
+              echo "Apply reported AlreadyExists — patching existing ConfigMap ${cm_name}..."
+              kubectl -n "$ns" patch configmap "$cm_name" --type merge \
+                -p "$(printf '{"data":{"%s":"%s"}}' "$cluster_name" "$result")"
+              kubectl -n "$ns" patch configmap "$cm_name" --type merge -p "${owner_patch}" || true
+            else
+              >&2 echo "kubectl apply failed:"
+              >&2 printf '%s\n' "$out"
+              exit "${rc:-1}"
+            fi
+          fi
       else
         echo "Patching ConfigMap ${cm_name} in namespace ${ns}..."
         kubectl patch configmap "$cm_name" -n "$ns" \
