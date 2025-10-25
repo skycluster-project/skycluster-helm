@@ -958,7 +958,8 @@ data:
             else:
               prob += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] <= c[i][mapping[u]]
               prob += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] <= c[j][mapping[v]]
-              prob += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] >= c[i][mapping[u]] + c[j][mapping[v]] - 1
+              # prob += y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] >= c[i][mapping[u]] + c[j][mapping[v]] - 1
+          prob += pulp.lpSum([y[i][j][f"{i},{j}|{mapping[u]},{mapping[v]}"] for v in tasks[j].permittedLocData]) == c[i][mapping[u]]
       return prob
 
     def constraints_required_locations(prob, tasks, c, mapping):
