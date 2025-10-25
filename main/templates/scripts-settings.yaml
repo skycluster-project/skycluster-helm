@@ -1,4 +1,4 @@
-{{ if or .Values.install }}
+{{ if or .Values.install .Values.t }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -137,6 +137,25 @@ data:
       echo "${workdir}/istio-${istio_ver}"
     }
 
+    wait_for_remote_ca() {
+      local kubeconfig="$1" namespace="$2" max_retries="${3:-10}" sleep_sec="${4:-5}" attempt=1
+      local keys=("ca-cert.pem" "ca-key.pem" "cert-chain.pem" "root-cert.pem")
+      while [ $attempt -le $max_retries ]; do
+        if secret_yaml=$(kubectl --kubeconfig="$kubeconfig" -n "$namespace" get secret cacerts -o yaml 2>/dev/null); then
+          all_present=true
+          for k in "${keys[@]}"; do
+            grep -q "$k:" <<<"$secret_yaml" || all_present=false
+          done
+          [ "$all_present" = true ] && return 0
+          echo "---- Remote CA secret incomplete. Retry $attempt/$max_retries..."
+        else
+          echo "---- Remote CA secret not found. Retry $attempt/$max_retries..."
+        fi
+        attempt=$((attempt+1)); sleep $sleep_sec
+      done
+      return 1
+    }
+
   istio-root-ca.sh: |
     #!/usr/bin/env bash
     set -euo pipefail
@@ -233,25 +252,29 @@ data:
       created_cacerts+=("${LOCAL_CLUSTER}")
     else
       echo "---- Found local cacerts secret; reuse."
+      # Extract data from existing secret into temp files
+      mkdir -p ${ISTIO_DIR}/tools/${LOCAL_CLUSTER}
+      kubectl -n istio-system get secret "$SECRET_NAME" -o json | \
+        jq -r '.data | to_entries[] | "\(.key) \(.value)"' | \
+        while read -r key val; do
+          echo "$val" | base64 --decode > "${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/$key"
+        done
+        echo $"---- Extracted existing cacerts to ${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/"
       reused_cacerts+=("${LOCAL_CLUSTER}")
     fi
 
     # combine the cluster cacerts with remote-secret data just to be consistent
     # with the way we setup remote clusters
-    echo "---- Creating remote-secret for ${LOCAL_CLUSTER}…"
-    if ! kubectl -n "${NAMESPACE}" get secret "${LOCAL_CLUSTER}-cacerts" >/dev/null 2>&1; then
-      echo "---- Storing generated cacerts for intermediate CA for local cluster: ${LOCAL_CLUSTER}-cacerts"
-
-      istioctl create-remote-secret --kubeconfig="${KUBECFG_PATH}" \
-        --name="${LOCAL_CLUSTER}" > "${tmpdir}/remote-secret.yaml"
-      
-      # create and with remote-secret.yaml
+    if wait_for_remote_ca "${KUBECFG_PATH}" "istio-system"; then
+      echo "---- Remote CA ready, creating secret..."
+      istioctl create-remote-secret --kubeconfig="${KUBECFG_PATH}" --name="${LOCAL_CLUSTER}" > "$tmpdir/remote-secret.yaml"      
+      echo "---- Creating local cluster cacerts secret '${LOCAL_CLUSTER}-cacerts' with remote-secret data…"
       kubectl -n "${NAMESPACE}" create secret generic "${LOCAL_CLUSTER}-cacerts" \
         --from-file=ca-cert.pem="${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/ca-cert.pem" \
         --from-file=ca-key.pem="${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/ca-key.pem" \
         --from-file=cert-chain.pem="${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/cert-chain.pem" \
         --from-file=root-cert.pem="${ISTIO_DIR}/tools/${LOCAL_CLUSTER}/root-cert.pem" \
-        --from-file=remote-secret.yaml="${tmpdir}/remote-secret.yaml" \
+        --from-file=remote-secret.yaml="$tmpdir/remote-secret.yaml" \
         --dry-run=client -o yaml \
       | kubectl label --local -f - --overwrite \
           "skycluster.io/managed-by=skycluster" \
@@ -259,10 +282,9 @@ data:
           "skycluster.io/cluster-name=${LOCAL_CLUSTER}" \
           --dry-run=client -o yaml \
       | kubectl -n "${NAMESPACE}" apply -f -
-      created_cacerts+=("${LOCAL_CLUSTER}")
     else
-      echo "---- Found local cacerts secret; reuse."
-      reused_cacerts+=("${LOCAL_CLUSTER}")
+      echo "---- Remote CA secret missing or incomplete, aborting."
+      exit 1
     fi
   
     echo "----- RESULT SUMMARY -----"
