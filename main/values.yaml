@@ -45,11 +45,11 @@ providers:
       compute:
         name: provider-azure-compute
         version: v1.13.1
-        enabled: true
+        enabled: false
       network:
         name: provider-azure-network
         version: v1.13.1
-        enabled: true
+        enabled: false
   community:
     openstack:  
       name: provider-openstack
@@ -86,5 +86,5 @@ functions:
     version: v0.9.0
   kcl:
     name: function-kcl
-    version: v0.11.4
+    version: v0.11.5
 
