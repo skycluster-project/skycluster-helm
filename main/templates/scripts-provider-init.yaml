@@ -1,4 +1,4 @@
-{{ if or .Values.install .Values.test }}
+{{ if or .Values.install }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -142,9 +142,9 @@ data:
     runcmd:
       - /usr/local/bin/iptables-postrouting.sh
       - |
-        crontab -u root -l 2>/dev/null > /tmp/mycron || true
-        echo "*/5 * * * * sudo /usr/local/bin/iptables-postrouting.sh" >> /tmp/mycron
-        crontab -u root /tmp/mycron
+        if ! crontab -u root -l 2>/dev/null | grep -Fq '/usr/local/bin/iptables-postrouting.sh'; then
+          (crontab -u root -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/iptables-postrouting.sh") | crontab -u root -
+        fi
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -260,10 +260,12 @@ data:
       - /usr/local/bin/install-tailscale.sh
       - /usr/local/bin/setup-tailscale.sh
       - |
-        crontab -u root -l 2>/dev/null > /tmp/mycron || true
-        echo "*/5 * * * * sudo /usr/local/bin/setup-tailscale.sh" >> /tmp/mycron
-        echo "* * * * * sudo /usr/local/bin/ping-check.sh" >> /tmp/mycron
-        crontab -u root /tmp/mycron
+        if ! crontab -u root -l 2>/dev/null | grep -Fq '/usr/local/bin/setup-tailscale.sh'; then
+          (crontab -u root -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/setup-tailscale.sh") | crontab -u root -
+        fi
+        if ! crontab -u root -l 2>/dev/null | grep -Fq '/usr/local/bin/ping-check.sh'; then
+          (crontab -u root -l 2>/dev/null; echo "* * * * * /usr/local/bin/ping-check.sh") | crontab -u root -
+        fi
 ---
 apiVersion: v1
 kind: ConfigMap
