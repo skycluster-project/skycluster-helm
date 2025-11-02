@@ -355,9 +355,20 @@ data:
       best_assign, best_cost, best_used = min(beam, key=lambda x: x[1])
       return best_assign, best_cost, best_used
 
+    # Return all keys from `keys` that match the wildcard `pattern`.
+    def match_keys(pattern, keys):
+      """
+      Supports:
+        *  - any number of any characters
+        ?  - exactly one character
+      """
+      import fnmatch
+      return [k for k in keys if fnmatch.fnmatch(k, pattern)]
+
   module_data.py: |
     from collections import defaultdict
     import json
+    from utils import match_keys
 
     PLATFORMS = ['aws', 'gcp', 'openstack']
 
@@ -615,7 +626,7 @@ data:
         for entry in data:
           vsName = entry.get('vservice_name').strip()
           vsProvider = entry.get('provider_name').strip()
-          vsCost = entry.get('deploy_cost')
+          vsCost = entry.get('deploy_cost', 0)
           vsAvailability = entry.get('availability')
           # TODO: If the is a new vserivce we cate an object for it
           if vsName not in vservices:
@@ -627,6 +638,7 @@ data:
       
     def import_tasks_locations2(filePath, vservices, providers):
       tasks = {}
+      vservicesKeys = list(vservices.keys())
       with open(filePath, 'r') as file:
           data = json.load(file)
           for entry in data:
@@ -648,7 +660,16 @@ data:
                   vs_name = vs.get('name', '').strip()
                   vs_kind = vs.get('kind', '').strip()
                   vs_num = str(vs.get('count', '1')).strip()
-                taskVS.append((vservices[vs_name], vs_num))
+                            
+                  # For ComputeProfile vservices, we have name label format of 4vCPU-8GB-...
+                  # where ... represents GPU attributes. We can use regex to match the names
+                  selected_vss = match_keys(vs_name, vservicesKeys)
+                  selected_vss = list(set(selected_vss))
+                  if len(selected_vss) == 0:
+                    print(f"Error: No matching vservice found for {vs_name} in task {tt}.")
+                  else:
+                    for svs in selected_vss:
+                      taskVS.append((vservices[svs], vs_num))
               tasks[tt].add_vservice(taskVS)
             
             tt_perLocData = entry.get('permittedLocations', [])
