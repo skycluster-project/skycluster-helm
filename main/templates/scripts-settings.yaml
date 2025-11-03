@@ -1,4 +1,4 @@
-{{ if or .Values.install .Values.t }}
+{{ if or .Values.install }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1451,12 +1451,6 @@ data:
       nodeCidr: 10.22.128.0/17
       podCidr:
         cidr: 172.22.0.0/16
-    - vpcCidr: 10.23.0.0/16
-      subnets:
-      - cidr: 10.23.0.0/18
-      nodeCidr: 10.23.128.0/17
-      podCidr:
-        cidr: 172.23.0.0/16
     - vpcCidr: 10.24.0.0/16
       subnets:
       - cidr: 10.24.0.0/18
