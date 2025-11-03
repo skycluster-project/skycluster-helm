@@ -698,7 +698,7 @@ data:
                     filteredProviderDict[p] = pp
               tasks[tt].requiredLocData.append(list(filteredProviderDict.values()))
 
-            tasks[tt].maxReplicaNum = int(entry.get('maxReplicaNum', -1))
+            tasks[tt].maxReplicaNum = int(entry.get('maxReplicas', -1))
       return tasks
       
     def import_tasks_edges_json(filePath):
