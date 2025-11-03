@@ -656,6 +656,7 @@ data:
             if len(tt_vservices_group) > 0:
               taskVS = []
               for vs_gr in tt_vservices_group:
+                taskVSGrp = []
                 for vs in vs_gr:
                   vs_name = vs.get('name', '').strip()
                   vs_kind = vs.get('kind', '').strip()
@@ -669,8 +670,9 @@ data:
                     print(f"Error: No matching vservice found for {vs_name} in task {tt}.")
                   else:
                     for svs in selected_vss:
-                      taskVS.append((vservices[svs], vs_num))
-              tasks[tt].add_vservice(taskVS)
+                      taskVSGrp.append((vservices[svs], vs_num))
+                taskVS.append(taskVSGrp)
+              tasks[tt].vservices = taskVS
             
             tt_perLocData = entry.get('permittedLocations', [])
             if len(tt_perLocData) == 0:
