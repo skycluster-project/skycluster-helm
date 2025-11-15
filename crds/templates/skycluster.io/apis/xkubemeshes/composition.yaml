@@ -162,7 +162,7 @@ spec:
 
             # Default (local) provider config
             _k8sProvCfgName = _xsetup.status?.providerConfig?.kubernetes?.name or Undefined
-            _k8sMgmtClusterName = "k8s-skycluster-management"
+            _k8sMgmtClusterName = "skycluster-management"
 
             _default_labels = {
               **oxr.metadata?.labels,

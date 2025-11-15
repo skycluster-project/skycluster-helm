@@ -57,7 +57,7 @@ spec:
                     value: k8s-connection-data
                   - key: skycluster.io/cluster-name
                     type: Value
-                    value: k8s-skycluster-management
+                    value: skycluster-management
             - kind: Secret
               into: SecretCAs
               apiVersion: v1
@@ -138,7 +138,7 @@ spec:
                 metadata = {
                   labels = _default_labels | {
                     "skycluster.io/config-type" = "helm-connection-data"
-                    "skycluster.io/cluster-name" = "k8s-skycluster-management"
+                    "skycluster.io/cluster-name" = "skycluster-management"
                   }
                   annotations = {
                       **_default_annotations,
@@ -160,7 +160,7 @@ spec:
                 metadata = {
                   labels = _default_labels | {
                     "skycluster.io/config-type" = "k8s-connection-data"
-                    "skycluster.io/cluster-name" = "k8s-skycluster-management"
+                    "skycluster.io/cluster-name" = "skycluster-management"
                   }
                   annotations = {
                       **_default_annotations,
@@ -466,7 +466,7 @@ spec:
             #
             # Istio pre setup: generate root cacerts,
             # it also generates ca cert for the local management cluster and
-            # store them in a secret with name k8s-skycluster-management-cacerts
+            # store them in a secret with name skycluster-management-cacerts
             # We fetch the generated secret for istio root-ca using extraResource
             #
             _items += [ _helper_root_ca(_kubeconfig_B64) ] if _k8sProvCfgName or ocds?["caCerts"] else []

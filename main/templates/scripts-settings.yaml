@@ -178,7 +178,7 @@ data:
     ROOT_SECRET_NAME="${ROOT_SECRET_NAME:-istio-root-ca}"
     SCRIPTS_DIR="${SCRIPTS_DIR:-/scripts}"
     
-    LOCAL_CLUSTER="k8s-skycluster-management"
+    LOCAL_CLUSTER="skycluster-management"
     
     tmpdir="$(mktemp -d)"
     source ${SCRIPTS_DIR}/functions.sh
@@ -355,6 +355,8 @@ data:
         gcp) echo "gcp.skycluster.io" ;;
         aws) echo "aws.skycluster.io" ;;
         openstack) echo "os.skycluster.io" ;;
+        baremetal) echo "bm.skycluster.io" ;;
+        azure) echo "azure.skycluster.io" ;;
         *) echo "Unknown provider" ;;
       esac
     }
@@ -396,6 +398,7 @@ data:
         popd >/dev/null
         
         API_VERSION=$(get_domain "${PLATFORM}") 
+        echo "kubectl get xkubes.${API_VERSION} ${CLUSTER_NAME}"
         OBJ_UID=$(kubectl get "xkubes.${API_VERSION}" "${CLUSTER_NAME}" -o jsonpath='{.metadata.uid}')
         
         kubectl -n "${NAMESPACE}" create secret generic "${CACERTS_SECRET}" \
@@ -573,6 +576,32 @@ data:
           kubectl "${KUBECONFIG_ARG[@]}" get clusterrolebinding "$crb" >/dev/null 2>&1 \
             && kubectl "${KUBECONFIG_ARG[@]}" delete clusterrolebinding "$crb" --force --grace-period=0 || true
         done
+      fi
+    fi
+
+    # --- Cluster-scoped cleanup: CRDs matching CHART_NAME ---
+    if [[ -n "$CHART_NAME" ]]; then
+      echo "=== CRD cleanup for chart name: '$CHART_NAME' ==="
+
+      # If CHART_NAME is "base", match "istio" instead
+      if [[ "$CHART_NAME" == "base" ]]; then
+        pattern="istio"
+        
+        # List CRD name|group, filter by group containing the pattern, then take the CRD name
+        mapfile -t crds_to_delete < <(
+          kubectl "${KUBECONFIG_ARG[@]}" get crd -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.spec.group}{"\n"}{end}' 2>/dev/null \
+            | grep -E "${pattern}" || true \
+            | cut -d'|' -f1
+        )
+
+        if ((${#crds_to_delete[@]} == 0)); then
+          echo "No CRDs found with group matching '${pattern}'."
+        else
+          for crd in "${crds_to_delete[@]}"; do
+            echo "Deleting CRD: $crd (matched group contains '${pattern}')"
+            kubectl "${KUBECONFIG_ARG[@]}" delete crd "$crd" --ignore-not-found --wait=false || true
+          done
+        fi
       fi
     fi
 
