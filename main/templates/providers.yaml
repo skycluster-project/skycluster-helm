@@ -10,6 +10,7 @@ metadata:
     skycluster.io/managed-by: skycluster
 spec:
   package: xpkg.upbound.io/upbound/{{ $spec.name }}:{{ $spec.version }}
+  # skipDependencyResolution: true
 ---
       {{ end }}
     {{ end }}
@@ -49,5 +50,30 @@ spec:
 ---
   {{ end -}} # End of range .Values.providers.community
 ############################################################
-
+# Fixing provider family versions
+  {{ range $key, $provider := .Values.providers.public }}
+    {{ if eq $key "aws" }}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-family-{{ $key }}
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-aws:v1.23.2
+---
+    {{ end }}
+    {{ if eq $key "gcp" }}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-family-{{ $key }}
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-gcp:v1.14.1
+---
+    {{ end }}
+  {{ end -}}
+############################################################
 {{ end -}} # End of .Values.install
