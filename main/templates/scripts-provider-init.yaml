@@ -270,6 +270,62 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: script-docker-config
+  namespace: skycluster-system
+  labels:
+    skycluster.io/managed-by: skycluster
+    skycluster.io/script-type: cloud-init
+    skycluster.io/script-target: provider-init
+    skycluster.io/script-init: docker-config
+data:
+  cloud-init: |
+    #cloud-config
+    write_files:
+      - path: /usr/local/bin/install-docker.sh
+        owner: root:root
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+          set -eux
+
+          # Update
+          apt-get update -y
+
+          # Install dependencies
+          apt-get install -y ca-certificates curl gnupg lsb-release
+
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+
+          # Add Docker APT repository
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+            > /etc/apt/sources.list.d/docker.list
+
+          apt-get update -y && \
+            apt-get install -y \
+              docker-ce \
+              docker-ce-cli \
+              containerd.io \
+              docker-buildx-plugin \
+              docker-compose-plugin
+
+          # Enable and start Docker
+          systemctl enable --now docker
+
+          # Optional: add your default user to docker group
+          if id ubuntu >/dev/null 2>&1; then
+            usermod -aG docker ubuntu
+          fi
+
+    runcmd:
+      - /usr/local/bin/install-docker.sh
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: script-bird-config
   namespace: skycluster-system
   labels:
