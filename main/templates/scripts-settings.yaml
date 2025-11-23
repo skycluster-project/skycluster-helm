@@ -302,6 +302,7 @@ data:
     # and use make file to generate CAs and istioctl to create the necessary certificates
     # for remote clusters and store all data in <cluster-name>-cacerts secret.
     # If the secret exists, it will be reused.
+    # Skipping the management-cluster itself (it should have been created already).
 
     export PATH=$PATH:/opt/bitnami/kubectl/bin:/usr/local/bin
     which kubectl || echo "WARNING: Kubectl not found"
@@ -370,6 +371,13 @@ data:
       PLATFORM=$(awk -F'\t' '{print $3}' <<< "$ENTRY")
       echo "---- Cluster: ${C} and cluster name: ${CLUSTER_NAME} and provider platform: ${PLATFORM}"
 
+      # Determine API domain for platform early; skip if unknown
+      API_VERSION="$(get_domain "${PLATFORM}")"
+      if [[ "${API_VERSION}" == Unknown* || -z "${API_VERSION}" ]]; then
+        echo "---- WARNING: Unknown provider platform '${PLATFORM}' for secret '${C}'; skipping this cluster"
+        continue
+      fi
+
       # Extract kubeconfig to temp
       tmpdir="$(mktemp -d)"
       secretData=$(kubectl -n "${NAMESPACE}" get secret "${C}" -o json)
@@ -396,11 +404,10 @@ data:
         pushd "${ISTIO_DIR}/tools" >/dev/null
         make -f ./certs/Makefile.selfsigned.mk "${C}-cacerts"
         popd >/dev/null
-        
-        API_VERSION=$(get_domain "${PLATFORM}") 
+
         echo "kubectl get xkubes.${API_VERSION} ${CLUSTER_NAME}"
         OBJ_UID=$(kubectl get "xkubes.${API_VERSION}" "${CLUSTER_NAME}" -o jsonpath='{.metadata.uid}')
-        
+
         kubectl -n "${NAMESPACE}" create secret generic "${CACERTS_SECRET}" \
           --from-file=ca-cert.pem="${ISTIO_DIR}/tools/${C}/ca-cert.pem" \
           --from-file=ca-key.pem="${ISTIO_DIR}/tools/${C}/ca-key.pem" \
@@ -441,7 +448,7 @@ data:
     echo "created_cacerts: ${created_cacerts[*]-}"
     echo "reused_cacerts: ${reused_cacerts[*]-}"
     echo "patched_remote_secrets: ${patched_remote[*]-}"
-    
+
     echo "SUCCESS"
     exit 0
 
