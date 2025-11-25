@@ -75,12 +75,8 @@ spec:
             provider-helm = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
             provider-gcp = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
             helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
-          source: |2
-
+          source: |
             import regex as re
-            import yaml
-            import base64
-
             import helper.v1alpha1.main as helper
             import provider_gcp.compute.v1beta1 as gcpv1beta1
             import provider_gcp.cloudplatform.v1beta1 as cp_v1b1
@@ -107,7 +103,6 @@ spec:
 
             _xSetup = _extraRes["XSetup"][0]
             assert _xSetup is not Undefined, "XSetup must be provided in the extra resources"
-
 
             _oxrName = oxr.metadata.name
             _oxrProvRegion = oxr.spec.providerRef.region
@@ -147,18 +142,17 @@ spec:
 
             _items += [_helper_subnet("subnetEks")]
 
-            # we need to get the default node group spec if defined
-            # then set the init count based on that
-            _nodeGroups = oxr.spec.nodeGroups
-            _defaultNodeGroup = [n for n in oxr.spec.nodeGroups if n?["type"] == "default"]
-            _nodeGroupsExists = any_true([ocds?["nodePool{}".format(i)] or False for i, _ in _nodeGroups])
-            assert len(_defaultNodeGroup) <= 1, "Only one default node group is allowed"
-            _defaultNodeCount = _defaultNodeGroup?[0]?.nodeCount or 1
+            # we need to have a default node group spec
+            # _defaultNodeGroup = [n for n in oxr.spec.nodeGroups if n?["type"] == "default"]
+            # assert len(_defaultNodeGroup) <= 1, "Only one default node group is allowed"
+            _defaultNodeCount = 2
 
             _items += [
               _helper_cluster("gkecluster", _svcAccEmail, _project, _defaultNodeCount)
-            ] if (_project and _svcAccEmail) or ocds?["gkecluster"] else []
+            ] if (_project and _svcAccEmail and helper._ready(ocds?["subnetEks"])) or ocds?["gkecluster"] else []
 
+            _nodeGroups = oxr.spec.nodeGroups
+            _nodeGroupsExists = any_true([ocds?["nodePool{}".format(i)] or False for i, _ in _nodeGroups])
             _items += [
               _helper_node_group(i, ng, _svcAccEmail) for i, ng in _nodeGroups if ng["type"] != "default"
             ] if _svcAccEmail or _nodeGroupsExists else []
@@ -195,12 +189,10 @@ spec:
               k8sv1a1.Object{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("workloadIdentitySettings"),
                     **helper._is_paused_label(oxr.metadata.labels),
                   }
@@ -228,7 +220,6 @@ spec:
               } 
             ] if (helper._ready(ocds?["gkecluster"]) and _k8sProvCfgName) or ocds?["workloadIdentitySettings"] else []
 
-
             # _defaultSubnetStatus = extra?.defaultSubnet?[0]?.Resource?.status
             # _cidrs = {s.rangeName = s.ipCidrRange for s in _defaultSubnetStatus?.atProvider?.secondaryIpRange}
 
@@ -248,7 +239,6 @@ spec:
               }
             }
 
-
             # extraResources = {
             #   apiVersion: "meta.krm.kcl.dev/v1alpha1"
             #   kind: "ExtraResources"
@@ -264,27 +254,22 @@ spec:
             #   }
             # }
 
-
             items = [*_items, dxr]
-
 
             _helper_svc_acc = lambda s {
               cp_v1b1.ServiceAccount{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
-                    displayName = _oxrName,
+                    displayName = _oxrName
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,
@@ -297,12 +282,10 @@ spec:
               cp_v1b1.ServiceAccountKey{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}".format(s)),
                     **helper._is_paused_label(oxr.metadata.labels),
                   }
@@ -312,7 +295,7 @@ spec:
                     serviceAccountIdSelector.matchControllerRef = True,
                   },
                   writeConnectionSecretToRef = {
-                    name = "k8s-gke-sa-{}".format(oxr.metadata.name),
+                    name = "k8s-gke-sa-{}".format(_oxrName),
                     # name = "{}-sakey".format(oxr.metadata.uid),
                     namespace = _ns,
                   }
@@ -327,12 +310,10 @@ spec:
               cp_v1b1.ProjectIAMMember{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
                     **helper._is_paused_label(oxr.metadata.labels),
                   }
@@ -354,14 +335,11 @@ spec:
               container_v1b1.Cluster{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -395,13 +373,14 @@ spec:
                     }
                     subnetworkSelector.matchLabels = {
                       **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"]),
-                      "skycluster.io/cluster-name" = oxr.metadata.name
+                      "skycluster.io/cluster-name" = _oxrName
                     }
                     nodeConfig = [{
                       diskSizeGb = 20,
                       diskType = "pd-standard",
                       imageType = "UBUNTU_CONTAINERD",
-                      machineType = "e2-medium" # TODO
+                      machineType = "e2-medium" 
+                      preemptible = False
                       # This is a public node
                       labels = {
                         "submariner.io/gateway" = "true"
@@ -418,24 +397,26 @@ spec:
                       metadata = {
                         "disable-legacy-endpoints" = "true",
                       }
-                      # tags = [
-                      #   "skycluster-internal" # only route 10.0.0.0/8 to gateway
-                      # ]
+                      tags = [
+                        # Nodes route the the subnet range via submariner, that is the range
+                        # defined in the subnet primary and secondary range, and service range
+                        # However, for the rest of the traffic, i.e. management traffic, we route it
+                        # to the gateway node
+                        "skycluster-internal" # 10.0.0.0/8 to gateway, priority goes to the sumariner routes
+                      ]
                     }]
-                    nodeVersion = "1.32.6-gke.1060000"
-                    minMasterVersion = "1.32.6-gke.1060000"
+                    nodeVersion = "1.33.5-gke.1201000"
+                    minMasterVersion = "1.33.5-gke.1201000"
                     removeDefaultNodePool = False
-                    workloadIdentityConfig = [
-                      {
-                        workloadPool = "{}.svc.id.goog".format(p) if p else Undefined
-                      }
-                    ]
+                    workloadIdentityConfig = [{
+                      workloadPool = "{}.svc.id.goog".format(p) if p else Undefined
+                    }]
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,
                   },
                   writeConnectionSecretToRef = {
-                    name = "k8s-gke-auth-{}".format(oxr.metadata.name),
+                    name = "k8s-gke-auth-{}".format(_oxrName),
                     # name = "{}-gkecluster".format(oxr.metadata.uid),
                     namespace = _ns,
                   },
@@ -447,7 +428,6 @@ spec:
               container_v1b1.NodePool{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/composite-name" = _oxrName,
                   }
@@ -463,11 +443,12 @@ spec:
                     autoscaling = [
                       {
                         totalMinNodeCount = ng.autoscaling?.minSize or 1,
-                        totalMaxNodeCount = ng.autoscaling?.maxSize or 3,
+                        totalMaxNodeCount = ng.autoscaling?.maxSize or 100,
                       }
                     ]
                     clusterSelector.matchControllerRef = True
-                    initialNodeCount = ng.nodeCount or 1
+                    if ng.nodeCount:
+                      initialNodeCount = ng.nodeCount
                     management = [
                       {
                         autoRepair = True,
@@ -478,22 +459,25 @@ spec:
                       networkConfig = [
                         {enablePrivateNodes = True}
                       ]
-                    # maxPodsPerNode = 55 not available for route-based clusters
+                    # maxPodsPerNode = 55 # not available for route-based clusters
                     nodeConfig = [
                       {
                         diskSizeGb = 20,
                         diskType = "pd-standard",
                         imageType = "UBUNTU_CONTAINERD",
-                        machineType = ng.instanceType or "e2-medium",
-                        if ng.publicAccess:
-                          labels = {
+                        machineType = it,
+                        labels = {
+                          if ng.publicAccess:
                             "submariner.io/gateway" = "true"
-                          }
+                          if _xSetup.status?.providerProfileName:
+                            "skycluster.io/provider-profile" = _xSetup.status?.providerProfileName
+                        }
+                          
                         metadata.disableLegacyEndpoints = "true",
                         oauthScopes = [
                           "https://www.googleapis.com/auth/cloud-platform"
                         ],
-                        preemptible = True,
+                        spot = True,
                         shieldedInstanceConfig: [
                           {
                             enableIntegrityMonitoring = True,
@@ -510,7 +494,7 @@ spec:
                         # else:
                         #   "skycluster-internal" # only route 10.0.0.0/8 to gateway
                         ]
-                      }
+                      } for it in ng.instanceTypes
                     ]
                   },
                   providerConfigRef = {
@@ -524,11 +508,10 @@ spec:
               gcpv1beta1.Subnetwork{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
-                    "skycluster.io/cluster-name" = oxr.metadata.name
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
+                    "skycluster.io/cluster-name" = _oxrName
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
                   }
                 }
@@ -563,10 +546,9 @@ spec:
               k8sv1a2.Object{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
                   },
                 },
@@ -577,13 +559,12 @@ spec:
                       apiVersion = "v1",
                       kind = "Secret",
                       metadata = {
-                        name = "k8s-gke-{}".format(oxr.metadata.name),
+                        name = "k8s-gke-{}".format(_oxrName),
                         namespace = _ns,
                         labels = {
-                          **oxr.metadata?.labels,
                           **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                           "skycluster.io/secret-type" = "k8s-connection-data",
-                          "skycluster.io/cluster-name" = oxr.metadata.name,
+                          "skycluster.io/cluster-name" = _oxrName,
                           "skycluster.io/provider-platform" = "gcp"
                         },
                         annotations = {
@@ -618,14 +599,14 @@ spec:
                     dependsOn = {
                       apiVersion = "v1"
                       kind = "Secret"
-                      name = "k8s-gke-{}".format(oxr.metadata.name)
+                      name = "k8s-gke-{}".format(_oxrName)
                       namespace = _ns
                     }
                   }, {
                     dependsOn = {
                       apiVersion = "v1"
                       kind = "Secret"
-                      name = "k8s-gke-sa-{}".format(oxr.metadata.name),
+                      name = "k8s-gke-sa-{}".format(_oxrName),
                       namespace = _ns
                     }
                   }]
@@ -635,11 +616,11 @@ spec:
                       apiVersion = "{}.crossplane.io/{}".format(t, "v1beta1" if t == "helm" else "v1alpha1"),
                       kind = "ProviderConfig",
                       metadata = {
-                        name = "k8s-gke-{}".format(oxr.metadata.name),
+                        name = "k8s-gke-{}".format(_oxrName),
                         namespace = _ns,
                         labels = {
                           "skycluster.io/managed-by" = "skycluster"
-                          "skycluster.io/cluster-name" = oxr.metadata.name
+                          "skycluster.io/cluster-name" = _oxrName
                           "skycluster.io/config-type" = "{}-connection-data".format("k8s" if t == "kubernetes" else "helm")
                         },
                       },
@@ -648,14 +629,14 @@ spec:
                           source = "Secret"
                           type = "GoogleApplicationCredentials"
                           secretRef = {
-                            name = "k8s-gke-{}".format(oxr.metadata.name)
+                            name = "k8s-gke-{}".format(_oxrName)
                             namespace = _ns,
                             key = "kubeconfig"
                           }
                         }
                         identity = {
                           secretRef = {
-                            name = "k8s-gke-sa-{}".format(oxr.metadata.name),
+                            name = "k8s-gke-sa-{}".format(_oxrName),
                             namespace = _ns
                             key = "private_key"
                           }

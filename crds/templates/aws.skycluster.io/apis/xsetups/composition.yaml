@@ -52,9 +52,6 @@ spec:
             provider-kubernetes = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
             helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
           source: |
-            import json
-            import base64
-            import yaml
             import helper.v1alpha1.main as helper
             import provider_aws.ec2.v1beta1 as ec2v1beta1
 
@@ -63,8 +60,8 @@ spec:
             # _dxr = option("params").dxr # desired composite resource
             # dcds = option("params").dcds # desired composed resources
 
-            assert oxr.metadata?.labels is not Undefined, "At least one label must be specified"
-            assert "skycluster.io/managed-by" in oxr.metadata.labels, "Label 'skycluster.io/managed-by' must be specified"
+            # assert oxr.metadata?.labels is not Undefined, "At least one label must be specified"
+            # assert "skycluster.io/managed-by" in oxr.metadata.labels, "Label 'skycluster.io/managed-by' must be specified"
 
             ctx = option("params")?.ctx
             assert ctx is not Undefined, "Context must be provided in the params"
@@ -99,9 +96,7 @@ spec:
             _udpPorts = oxr.spec.udpPorts
 
             _items = []
-            _items += [
-              _helper_vpc()
-            ]
+            _items += [ _helper_vpc() ]
 
             _subnets = []
             _subnets +=  [{
@@ -138,8 +133,8 @@ spec:
             _items += [_helper_sg()]
 
             _items += [_helper_sg_rule_outbound()]
-
             _items += [_helper_sg_rule_inbound_icmp()]
+            _items += [_helper_sg_rule_inbound_internal()]
 
             #
             # Inbound TCP security group rules
@@ -147,10 +142,12 @@ spec:
             _tcpPortDefaults = [
               {"fromPort" = 30000, "toPort" = 32767},
               {"fromPort" = 32768, "toPort" = 60999},
+              {"fromPort" = 15000, "toPort" = 15100} # istio envoy
             ]
-            _tcpPortDefaults = _tcpPortDefaults + [
+
+            _tcpPortDefaults = (_tcpPortDefaults if _tcpPortDefaults else []) + [
               {"fromPort" = port, "toPort" = port} 
-                for port in [22 80 443 6443 8080 9100 179 4789 5473 2379 10250]
+                for port in [22 80 443 6443 8080 9100 179 4789 5473 2379 10250 8000 8001 9000 9001]
             ]
             _tcpPortsToUse = _tcpPorts if _tcpPorts else _tcpPortDefaults
 
@@ -171,7 +168,7 @@ spec:
             _items += [_helper_keypair("keypair")] if oxr.spec?.publicKey or ocds?["keypair"] else []
 
             # Elastic IP configuration
-            _items += [_helper_eip()]
+            # _items += [_helper_eip()]
 
             _ami = oxr.spec.gateway?.image 
             assert _ami, "Gateway image must be specified in the XSkyCluster spec"
@@ -185,17 +182,56 @@ spec:
             _userData = oxr.spec.gateway?.userData 
             _userData = _userData.replace("__SUBNETCIDR__", _vpcCidr) if _userData else Undefined
 
-            _items += [
+            _networkIfId = ocds?["networkInterface"]?.Resource?.status?.atProvider?.id
+            _items += [ _helper_ec2_instance(_networkIfId) ] if _networkIfId or ocds?["gwInstance"] else []
+
+            _keyPairId = ocds?.keypair?.Resource?.status?.atProvider?.keyPairId 
+            _keypairName = ocds?.keypair?.Resource?.status?.atProvider?.id 
+            _vpcId = ocds?.vpc?.Resource?.status?.atProvider?.id
+            _ocdsSubnets = [v.Resource for k, v in ocds if k.find("subnet") != -1 and v.Resource]
+            _publicIp = ocds?["gwInstance"]?.Resource?.status?.atProvider?.publicIp
+            _privateIp = ocds?["gwInstance"]?.Resource?.status?.atProvider?.privateIp
+
+            dxr = {
+              **option("params").dxr,
+              status = {
+                if _keyPairId and _keypairName:
+                  keypair = {
+                    name = _keyPairId
+                    id = _keypairName
+                  }
+                if _vpcId:
+                  vpc = {
+                    id = _vpcId
+                    cidrBlock = _vpcCidr 
+                  }
+                subnets = [
+                  {
+                    type = "public" if v.metadata?.labels?["skycluster.io/public-subnet"] and v.metadata?.labels?["skycluster.io/public-subnet"] == "true" else "private"
+                    id = v.status?.atProvider?.id
+                    cidrBlock = v.status?.atProvider?.cidrBlock
+                  } for _, v in _ocdsSubnets if v
+                ]
+                if _publicIp or _privateIp:
+                  gateway = {
+                    publicIp = _publicIp
+                    privateIp = _privateIp
+                  } 
+              }
+            }
+
+            #
+            ############### Helper Mixins ################
+            #
+
+            # Collect all resources into a list for output
+            items = [*_items, dxr]
+
+            _helper_ec2_instance = lambda _netIfId {
               ec2v1beta1.Instance{
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels
-                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
-                  }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("gwInstance"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -211,13 +247,9 @@ spec:
                     }]
                     networkInterface = [
                       {
-                        networkInterfaceIdSelector = {
-                          matchControllerRef = True,
-                          matchLabels = {
-                            **helper._filter_default_labels(oxr.metadata.labels)
-                            "skycluster.io/interface-id" = "network-interface",
-                          }
-                        }
+                        networkInterfaceId = \
+                          ocds?["gwInstance"]?.Resource?.status?.atProvider?.networkInterface?[0]?.networkInterfaceId \
+                            or _netIfId
                         deviceIndex = 0,
                         deleteOnTermination = False
                       }
@@ -229,56 +261,16 @@ spec:
                   },
                 }
               }
-            ] if helper._ready(ocds?["networkInterface"]) or ocds?["gwInstance"] else []
-
-            _keyPairId = ocds?.keypair?.Resource?.status?.atProvider?.keyPairId 
-            _keypairName = ocds?.keypair?.Resource?.status?.atProvider?.id 
-            _vpcId = ocds?.vpc?.Resource?.status?.atProvider?.id
-            _ocdsSubnets = [v.Resource for k, v in ocds if k.find("subnet") != -1 and v.Resource]
-            _publicIp = ocds?["elasticIP"]?.Resource?.status?.atProvider?.publicIp
-            _privateIp = ocds?["elasticIP"]?.Resource?.status?.atProvider?.privateIp
-
-            dxr = {
-              **option("params").dxr,
-              status.keypair = {
-                name = _keyPairId
-                id = _keypairName
-              } if _keyPairId and _keypairName else {},
-              status.vpc = {
-                id = _vpcId
-                cidrBlock = _vpcCidr 
-              } if _vpcId else {},
-              status.subnets = [
-                {
-                  type = "public" if v.metadata?.labels?["skycluster.io/public-subnet"] and v.metadata?.labels?["skycluster.io/public-subnet"] == "true" else "private"
-                  id = v.status?.atProvider?.id
-                  cidrBlock = v.status?.atProvider?.cidrBlock
-                } for _, v in _ocdsSubnets if v
-              ]
-              status.gateway = {
-                publicIp = _publicIp
-                privateIp = _privateIp
-              } if _publicIp or _privateIp else {},
             }
-
-            #
-            ############### Helper Mixins ################
-            #
-
-            # Collect all resources into a list for output
-            items = [*_items, dxr]
 
             _helper_eip = lambda {
               ec2v1beta1.EIP {
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("elasticIP"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -288,7 +280,6 @@ spec:
                     networkInterfaceSelector = {
                       matchControllerRef = True
                       matchLabels = {
-                        **helper._filter_default_labels(oxr.metadata.labels)
                         "skycluster.io/interface-id" = "network-interface",
                       }
                     }
@@ -304,14 +295,11 @@ spec:
             _helper_keypair = lambda s {
               ec2v1beta1.KeyPair{
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels 
+                  labels = { 
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId) 
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -330,13 +318,10 @@ spec:
               ec2v1beta1.VPC{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("vpc"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 }
                 spec ={
@@ -355,14 +340,11 @@ spec:
               ec2v1beta1.Subnet{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, "", _oxrAppId),
                     "skycluster.io/public-subnet" = "false" if s.type == "private" else "true",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("subnet{}{}".format("Private" if s.type == "private" else "Public", i)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -384,14 +366,11 @@ spec:
               ec2v1beta1.NetworkInterface{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/interface-id" = "network-interface",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("networkInterface"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -399,9 +378,8 @@ spec:
                     sourceDestCheck = False,
                     region = _oxrProvRegion,
                     subnetIdSelector = {
+                      matchControllerRef = True,
                       matchLabels = {
-                        **helper._filter_labels(oxr.metadata.labels, [
-                          "provider-platform", "provider-region", "application-id"])
                         "skycluster.io/public-subnet" = "true",
                       },
                     },
@@ -418,13 +396,10 @@ spec:
               ec2v1beta1.InternetGateway{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId) 
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("internet-gateway"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -443,14 +418,11 @@ spec:
               ec2v1beta1.RouteTable{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route-table".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -469,29 +441,25 @@ spec:
               ec2v1beta1.RouteTableAssociation{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/public-subnet" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route-table-association".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
                     region = _oxrProvRegion,
                     routeTableIdSelector = {
+                      matchControllerRef = True,
                       matchLabels = {
-                        **helper._filter_default_labels(oxr.metadata.labels)
                         "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                       },
                     },
                     subnetIdSelector = {
+                      matchControllerRef = True,
                       matchLabels = {
-                        **helper._filter_labels(oxr.metadata.labels, [
-                          "provider-platform", "provider-region", "application-id"])
                         "skycluster.io/public-subnet" = "true" if t == "public" else "false",
                       },
                     },
@@ -507,14 +475,11 @@ spec:
               ec2v1beta1.Route{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -522,8 +487,8 @@ spec:
                     destinationCidrBlock = "0.0.0.0/0",
                     region = _oxrProvRegion,
                     routeTableIdSelector = {
+                      matchControllerRef = True,
                       matchLabels = {
-                        **helper._filter_default_labels(oxr.metadata.labels)
                         "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                       },
                     },
@@ -531,8 +496,8 @@ spec:
                       gatewayIdSelector.matchControllerRef = True,
                     if t == "private":
                       networkInterfaceIdSelector = {
+                        matchControllerRef = True,
                         matchLabels = {
-                          **helper._filter_default_labels(oxr.metadata.labels)
                           "skycluster.io/interface-id" = "network-interface",
                         },
                       },
@@ -548,20 +513,21 @@ spec:
               ec2v1beta1.SecurityGroup{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/secgroup-type" = "default",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("security-group"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
                     region = _oxrProvRegion,
                     vpcIdSelector.matchControllerRef = True
+                    tags = {
+                      **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+                      "skycluster.io/secgroup-type" = "default",
+                    }
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,
@@ -574,23 +540,22 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("security-group-rule-outbound"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
                     region = _oxrProvRegion,
                     securityGroupIdSelector = {
-                      matchLabels = helper._filter_default_labels(oxr.metadata.labels) | {
+                      matchControllerRef = True,
+                      matchLabels = {
                         "skycluster.io/secgroup-type" = "default",
                       },
                     },
+                    description = "Allow all outbound traffic",
                     protocol = "-1",
                     fromPort = 0,
                     toPort = 0,
@@ -608,23 +573,22 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("security-group-rule-inbound-icmp"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
                     region = _oxrProvRegion,
                     securityGroupIdSelector = {
-                      matchLabels = helper._filter_default_labels(oxr.metadata.labels) | {
+                      matchControllerRef = True,
+                      matchLabels = {
                         "skycluster.io/secgroup-type" = "default",
                       },
                     },
+                    description = "Allow all ICMP traffic",
                     protocol = "icmp",
                     fromPort = -1,
                     toPort = -1,
@@ -642,28 +606,60 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("security-group-rule-inbound-{}-{}-{}".format(proto, port.fromPort, port.toPort)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
                   forProvider = {
                     region = _oxrProvRegion,
                     securityGroupIdSelector = {
-                      matchLabels = helper._filter_default_labels(oxr.metadata.labels) | {
+                      matchControllerRef = True,
+                      matchLabels = {
                         "skycluster.io/secgroup-type" = "default",
                       },
                     },
+                    description = "Inbound {}: {}-{}".format(proto, port.fromPort, port.toPort),
                     protocol = proto,
                     fromPort = port.fromPort,
                     toPort = port.toPort,
                     type = "ingress",
                     cidrBlocks = [ "0.0.0.0/0" ],
+                  },
+                  providerConfigRef = {
+                    name = _provCfg.metadata.name,
+                  },
+                }
+              }
+            }
+
+            _helper_sg_rule_inbound_internal = lambda {
+              ec2v1beta1.SecurityGroupRule{
+                metadata = {
+                  labels = {
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+                  }
+                  annotations = {
+                    **helper._set_resource_name("security-group-rule-inbound-self"),
+                  }
+                },
+                spec = {
+                  forProvider = {
+                    region = _oxrProvRegion,
+                    securityGroupIdSelector = {
+                      matchControllerRef = True,
+                      matchLabels = {
+                        "skycluster.io/secgroup-type" = "default",
+                      },
+                    },
+                    description = "Allow all internal traffic within the security group",
+                    self = True
+                    protocol = "-1",
+                    fromPort = 0,
+                    toPort = 0,
+                    type = "ingress",
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,

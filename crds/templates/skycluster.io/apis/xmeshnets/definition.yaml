@@ -1,0 +1,52 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xmeshnets.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XMeshNet
+    plural: xmeshnets
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XMeshNet is the Schema for the XMeshNet API.
+        properties:
+          spec:
+            description: XMeshCleanupSpec defines the desired state of XMeshCleanup.
+            properties:
+              clusterNames:
+                items:
+                  type: string
+                type: array
+              localCluster:
+                properties:
+                  podCidr:
+                    type: string
+                  serviceCidr:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: XMeshNetStatus defines the observed state of XMeshNet.
+            properties:
+              clusters:
+                items:
+                  properties:
+                    nameRef:
+                      type: string
+                    status:
+                      type: string
+                  type: object
+                type: array
+              log:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

@@ -1,9 +1,9 @@
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xsetups.aws.skycluster.io
+  name: xsetups.bm.skycluster.io
 spec:
-  group: aws.skycluster.io
+  group: bm.skycluster.io
   names:
     categories:
     - crossplane
@@ -21,19 +21,8 @@ spec:
             properties:
               applicationId:
                 type: string
-              gateway:
-                properties:
-                  flavor:
-                    type: string
-                  image:
-                    type: string
-                  userData:
-                    type: string
-                  volumeSize:
-                    type: number
-                  volumeType:
-                    type: string
-                type: object
+              gatewayDeviceName:
+                type: string
               providerRef:
                 properties:
                   platform:
@@ -44,63 +33,55 @@ spec:
                     properties:
                       primary:
                         type: string
-                      secondary:
-                        type: string
                     type: object
                 type: object
-              publicKey:
-                type: string
-              subnets:
+              workerDeviceNames:
                 items:
-                  properties:
-                    cidr:
-                      type: string
-                    type:
-                      type: string
-                    zone:
-                      type: string
-                  type: object
+                  type: string
                 type: array
-              vpcCidr:
-                type: string
             type: object
           status:
             description: XSetupStatus defines the observed state of XSetup.
             properties:
+              auth:
+                properties:
+                  privateKey:
+                    type: string
+                  secretName:
+                    type: string
+                type: object
+              deviceNodes:
+                items:
+                  properties:
+                    deviceName:
+                      type: string
+                    privateIp:
+                      type: string
+                    publicIp:
+                      type: string
+                    sshProviderConfigName:
+                      type: string
+                    sshSecretName:
+                      type: string
+                    type:
+                      type: string
+                    username:
+                      type: string
+                  type: object
+                type: array
               gateway:
                 properties:
                   privateIp:
                     type: string
                   publicIp:
                     type: string
-                type: object
-              keypair:
-                properties:
-                  id:
-                    type: string
-                  name:
+                  username:
                     type: string
                 type: object
               log:
                 type: string
-              subnets:
-                items:
-                  properties:
-                    cidrBlock:
-                      type: string
-                    id:
-                      type: string
-                    type:
-                      type: string
-                  type: object
-                type: array
-              vpc:
-                properties:
-                  cidrBlock:
-                    type: string
-                  id:
-                    type: string
-                type: object
+              subnetCidr:
+                type: string
             type: object
         required:
         - spec

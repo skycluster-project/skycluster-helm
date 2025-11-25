@@ -70,7 +70,6 @@ spec:
           dependencies: |
             helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
           source: |-
-            import json
             import helper.v1alpha1.main as helper
 
             oxr = option("params").oxr # observed composite resource
@@ -95,8 +94,9 @@ spec:
             _oxrProvZones = oxr.spec?.providerRef?.zones or Undefined
             _oxrProvZone = oxr.spec?.providerRef?.zones?.primary or Undefined
 
-            _ami = helper._get_image(_provSettings, oxr.spec?.image or "ubuntu-24.04", _oxrProvZone)?.name
-            _it = helper._get_instance_type(_provSettings, oxr.spec?.flavor or "2vCPU-4GB", _oxrProvZone)?[0]
+            if _oxrProvPlatform != "baremetal":
+              _ami = helper._get_image(_provSettings, oxr.spec?.image or "ubuntu-24.04", _oxrProvZone)?.name
+              _it = helper._get_instance_type(_provSettings, oxr.spec?.flavor or "2vCPU-4GB", _oxrProvZone)?[0]
 
             assert _oxrProvPlatform and _oxrProvRegion and _oxrProvZone, \
               "Provider platform, region, and primary zone and must be specified in the providerRef"
@@ -109,23 +109,25 @@ spec:
             _nodesTypes = oxr.spec?.nodeTypes or Undefined
             _principal = oxr.spec?.principal or Undefined
 
-
-            _a = [helper._get_instance_type(_provSettings, _it or "2vCPU-4GB", _oxrProvZone) for _it in _nodesTypes] if _nodesTypes else []
-            # convert lists in _a into a single list
-            _nodeTypes = [item for sublist in _a for item in sublist]
+            if _oxrProvPlatform != "baremetal":
+              _a = [helper._get_instance_type(_provSettings, _it or "2vCPU-4GB", _oxrProvZone) for _it in _nodesTypes] if _nodesTypes else []
+              # convert lists in _a into a single list
+              _nodeTypes = [item for sublist in _a for item in sublist]
 
             _items = []
+
+            _helper_list = lambda L {
+              [x for sub in L for x in sub]
+            }
 
             _items += [{
               apiVersion = "aws.skycluster.io/v1alpha1"
               kind = "XKube"
               metadata = {
                 labels = {
-                  **oxr.metadata?.labels,
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("xk8s")
                 }
               }
@@ -141,7 +143,7 @@ spec:
                 nodeGroups = [
                   *[{
                     nodeCount = n.nodeCount or 1
-                    instanceType = helper._get_instance_type(_provSettings, n.instanceType or "2vCPU-4GB", _oxrProvZone)
+                    instanceTypes = _helper_list([helper._get_instance_type(_provSettings, nn or "2vCPU-4GB", _oxrProvZone) for nn in n.instanceTypes])
                     publicAccess = n.publicAccess
                     if n.autoScaling:
                       autoScaling = {
@@ -169,11 +171,9 @@ spec:
               kind = "XKube"
               metadata = {
                 labels = {
-                  **oxr.metadata?.labels,
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("xk8s")
                 }
               }
@@ -181,12 +181,13 @@ spec:
                 applicationId = oxr.spec?.applicationId or Undefined
                 nodeCidr = oxr.spec?.nodeCidr or Undefined
                 podCidr = oxr.spec?.podCidr or Undefined
+                serviceCidr = oxr.spec?.serviceCidr or Undefined
 
                 nodeGroups = [
                   *[{
                     nodeCount = n.nodeCount or 1
                     type = n.type or "user-defined"
-                    instanceType = helper._get_instance_type(_provSettings, n.instanceType or "2vCPU-4GB", _oxrProvZone)?[0]
+                    instanceTypes = _helper_list([helper._get_instance_type(_provSettings, nn or "2vCPU-4GB", _oxrProvZone) for nn in n.instanceTypes])
                     publicAccess = n.publicAccess
                     if n.autoScaling:
                       autoScaling = {
@@ -227,19 +228,17 @@ spec:
               }
             }] if _oxrProvPlatform == "gcp" else []
 
-
-            _nodeGroups = [n for n in oxr.spec?.nodeGroups if n]
+            if _oxrProvPlatform != "baremetal":
+              _nodeGroups = [n for n in oxr.spec?.nodeGroups if n]
 
             _items += [{
               apiVersion = "os.skycluster.io/v1alpha1"
               kind = "XKube"
               metadata = {
                 labels = {
-                  **oxr.metadata?.labels,
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("xk8s")
                 }
               }
@@ -289,13 +288,42 @@ spec:
               }
             }] if _oxrProvPlatform == "openstack" else []
 
+            _items += [{
+              apiVersion = "bm.skycluster.io/v1alpha1"
+              kind = "XKube"
+              metadata = {
+                labels = {
+                  **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, ""),
+                }
+                annotations = {
+                  **helper._set_resource_name("xk8s")
+                }
+              }
+              spec = {
+                applicationId = oxr.spec?.applicationId or Undefined
+                serviceCidr = oxr.spec?.serviceCidr or Undefined
+                podCidr = oxr.spec?.podCidr?.cidr or Undefined
+
+                controlPlane.deviceNodeName = oxr.spec.controlPlane?.deviceNodeName or Undefined
+
+                nodes = oxr.spec?.nodes or Undefined
+
+                providerRef = {
+                  platform = _oxrProvPlatform
+                  region = _oxrProvRegion
+                  zones = _oxrProvZones
+                }
+              }
+            }] if _oxrProvPlatform == "baremetal" else []
+
 
             if _oxrProvPlatform == "openstack":
               _agents = ocds?["xk8s"]?.Resource?.status?.agents
 
             _controllers = ocds?["xk8s"]?.Resource?.status?.controllers
             _clusterSecretName = ocds?["xk8s"]?.Resource?.status?.clusterSecretName
-
+            _provCfgNameK8s = ocds?["xk8s"]?.Resource?.status?.providerConfigs?.k8s
+            _provCfgNameHelm = ocds?["xk8s"]?.Resource?.status?.providerConfigs?.helm
             # ###################### dxr ######################
 
             dxr = {
@@ -303,6 +331,11 @@ spec:
               status = {
                 clusterName = ocds?["xk8s"]?.Resource?.metadata?.name or Undefined
                 externalClusterName = ocds?["xk8s"]?.Resource?.status?.externalClusterName or Undefined
+                if _provCfgNameK8s or _provCfgNameHelm:
+                  providerConfigs = {
+                    k8s = _provCfgNameK8s or Undefined
+                    helm = _provCfgNameHelm or Undefined
+                  }
                 if _controllers:
                   controllers = [{
                       privateIp = s.privateIp or Undefined
@@ -320,13 +353,7 @@ spec:
                   clusterSecretName = _clusterSecretName
                 podCidr = ocds?["xk8s"]?.Resource?.status?.podCidr or Undefined
                 serviceCidr = ocds?["xk8s"]?.Resource?.status?.serviceCidr or Undefined
-                # log = json.encode({
-                #   controllers = [{
-                #       privateIp = s.privateIp or Undefined
-                #       publicIp = s.publicIp or Undefined
-                #     } for s in _controllers
-                #   ]
-                # })
+                # log = json.encode(helper._get_instance_type(_provSettings, "8vCPU-16GB" or "2vCPU-4GB", _oxrProvZone))
               }
             }
 

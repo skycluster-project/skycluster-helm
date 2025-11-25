@@ -113,10 +113,19 @@ spec:
                       type: string
                   type: object
                 type: array
+              externalClusterName:
+                type: string
               log:
                 type: string
               podCidr:
                 type: string
+              providerConfigs:
+                properties:
+                  helm:
+                    type: string
+                  k8s:
+                    type: string
+                type: object
               serviceCidr:
                 type: string
               subnet:

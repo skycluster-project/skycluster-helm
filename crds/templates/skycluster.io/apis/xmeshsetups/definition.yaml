@@ -1,0 +1,52 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xmeshsetups.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XMeshSetup
+    plural: xmeshsetups
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XMeshSetup is the Schema for the XMeshSetup API.
+        properties:
+          spec:
+            description: XMeshSetupSpec defines the desired state of XMeshSetup.
+            properties:
+              clusterNames:
+                items:
+                  type: string
+                type: array
+              localCluster:
+                properties:
+                  podCidr:
+                    type: string
+                  serviceCidr:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: XMeshSetupStatus defines the observed state of XMeshSetup.
+            properties:
+              clusters:
+                items:
+                  properties:
+                    nameRef:
+                      type: string
+                    status:
+                      type: string
+                  type: object
+                type: array
+              log:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

@@ -1,0 +1,49 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xobjects.skycluster.io
+spec:
+  claimNames:
+    kind: Object
+    plural: objects
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XObject
+    plural: xobjects
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: Object is the Schema for the Object API.
+        properties:
+          spec:
+            description: ObjectSpec defines the desired state of Object.
+            properties:
+              manifest:
+                x-kubernetes-preserve-unknown-fields: true
+              providerConfigRef:
+                properties:
+                  name:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: ObjectStatus defines the observed state of Object.
+            properties:
+              conditions:
+                items:
+                  properties:
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

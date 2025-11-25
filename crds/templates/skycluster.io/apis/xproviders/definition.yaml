@@ -41,6 +41,8 @@ spec:
                   volumeType:
                     type: string
                 type: object
+              gatewayDeviceName:
+                type: string
               providerRef:
                 properties:
                   platform:
@@ -68,8 +70,14 @@ spec:
                       type: string
                   type: object
                 type: array
+              providerName:
+                type: string
               vpcCidr:
                 type: string
+              workerDeviceNames:
+                items:
+                  type: string
+                type: array
             type: object
           status:
             description: XProviderStatus defines the observed state of XProvider.
@@ -82,6 +90,8 @@ spec:
                     type: string
                 type: object
               log:
+                type: string
+              providerProfileName:
                 type: string
               subnets:
                 items:

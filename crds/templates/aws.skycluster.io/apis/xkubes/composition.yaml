@@ -75,6 +75,23 @@ spec:
                   - key: skycluster.io/config-type
                     type: Value
                     value: connection-secret
+            - kind: ConfigMap
+              into: ProviderSettings
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.platform
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
     - step: resources
       functionRef:
         name: function-kcl
@@ -92,12 +109,17 @@ spec:
           source: |-
             import json
             import crypto
+            import regex
             import helper.v1alpha1.main as helper
             import provider_aws.eks.v1beta1 as eksv1beta1
             import provider_aws.eks.v1beta2 as eksv1beta2
             import provider_aws.iam.v1beta1 as iamv1beta1
             import provider_aws.ec2.v1beta1 as ec2v1beta1
             import provider_kubernetes.v1alpha2 as k8sv1a2
+
+            import provider_aws.sqs.v1beta1 as sqsv1beta1
+            import provider_aws.cloudwatchevents.v1beta1 as cloudwatcheventsv1beta1
+            import provider_helm.v1beta1 as helmv1b1
 
             oxr = option("params")?.oxr
             assert oxr.metadata?.labels is not Undefined, "At least one label must be specified"
@@ -107,11 +129,18 @@ spec:
             ctx = option("params")?.ctx
             assert ctx is not Undefined, "Context must be provided in the params"
 
+            # This is provided by KCL (see extraItem at the end)
+            extra = option("params")?.extraResources
+
+            _oxrName = oxr.metadata.name
             _oxrProvRegion = oxr.spec.providerRef.region
             _oxrProvZone = oxr.spec.providerRef.zones.primary
             _oxrProvPlatform = oxr.spec.providerRef.platform
             _oxrAppId = oxr.spec.providerRef.applicationId or Undefined
             _oxrServiceCidr = oxr.spec.serviceCidr or Undefined
+
+            _provSettings = _extraRes["ProviderSettings"]?[0] 
+            assert _provSettings is not Undefined, "Provider settings must be provided in the extra resources"
 
             assert _oxrProvRegion and _oxrProvZone and _oxrProvPlatform, \
               "Provider region, primary zone, platform must be specified"
@@ -119,6 +148,9 @@ spec:
 
             _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
             assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            _secGroups = extra["securityGroups"] or Undefined
+
             _provCfg = _extraRes["ProviderConfigs"][0]
             _skySetup = _extraRes["SkySetups"][0]
             _skyK8SProviderCfgName = _skySetup.status?.providerConfig?.kubernetes?.name
@@ -135,7 +167,6 @@ spec:
             }
 
             _subnets = [{
-              # type = "public"
               type = "public" 
               cidrBlock = oxr.spec.podCidr.public
               zone = oxr.spec.providerRef.zones.primary
@@ -159,24 +190,43 @@ spec:
             _items += [_helper_route_table_association("private")]
             _items += [_helper_route("private")]
 
-            _items += [_helper_cluster("k8sCluster")]
+            _subnetsReadiness = all_true(
+              [helper._ready(ocds?["subnet{}{}".format("Public" if s.type == "public" else "Private", i)] ) for i, s in _subnets]
+            )
+            _items += [_helper_cluster("k8sCluster")] if _subnetsReadiness or ocds?["k8sCluster"] else []
 
             _items += [
               _helper_cluster_auth("k8sAuth")
             ] if helper._ready(ocds?["k8sCluster"]) or ocds?["k8sAuth"] else []
 
-            _items += [
-              # The public node group is used to create nodes acting as gateways for the cluster.
-              _helper_node_group(i, ng) for i, ng in _nodeGroups
-            ] if helper._ready(ocds?["vpc-cni-addon"]) or ocds?["nodeGroupPublic"] else []
-
             _items += [_helper_role_node_group("nodegroupRole")]
+            _items += [_helper_launch_template()] if _secGroups else []
+
+            _lnchTemplateName = ocds?["lnchTemplatePublic"]?.Resource?.status?.atProvider?.name
+            _main_ng = {
+              publicAccess = True,
+              nodeCount = 2,
+              instanceTypes = ["t3.medium"],
+              autoScaling = {
+                minSize = 2,
+                maxSize = 3
+              }
+            }
+            _items += [
+              _helper_node_group(1000, _main_ng, _lnchTemplateName)
+            ] if (helper._ready(ocds?["vpc-cni-addon"]) and _lnchTemplateName) or ocds?["nodeGroup1000Public"] else []
+
+            # _items += [
+            #   # The public node group is used to create nodes acting as gateways for the cluster.
+            #   _helper_node_group(i, ng, _lnchTemplateName) for i, ng in _nodeGroups if ng.publicAccess
+            # ] if (helper._ready(ocds?["vpc-cni-addon"]) and _lnchTemplateName) or ocds?["nodeGroupPublic0"] else []
+
+            _items += _helper_ebs_role()
 
             _items += [
               _helper_access_entry(_principalArn),
               _helper_access_policy_assoc(_principalArn)
             ] if _principalArn else []
-
 
             _items += [
               _helper_addon_cni()
@@ -187,14 +237,53 @@ spec:
               [helper._ready(ocds?["nodeGroup{}{}".format("Public" if ng.publicAccess else "Private", i)] ) for i, ng in _nodeGroups]
             )
 
-            _items += [
-              _helper_addon_csi()
-            ] if _nodeGroupReadiness or ocds?["aws-ebs-csi-driver-addon"] else []
+            # TODO: Enable EBS CSI addon when needed
+            # _items += [
+            #   _helper_addon_csi()
+            # ] 
+            # if _nodeGroupReadiness or ocds?["aws-ebs-csi-driver-addon"] else []
 
 
             _items += [
               _helper_addon_pod_identity()
-            ] if _nodeGroupReadiness or ocds?["eks-pod-identity-agent"] else []
+            ] 
+            # if _nodeGroupReadiness or ocds?["eks-pod-identity-agent"] else []
+
+            ##### Karpenter Settings #####
+
+            _items += _helper_karpenter_roles(_oxrName)
+            _items += _helper_karpenter_sqs_cloudwatch(_oxrName)
+
+            _ProvCfgHelmName = ocds?["providerConfigHelm"]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+            _items += [_helper_karpenter_helm(
+              ocds?["k8sCluster"]?.Resource?.metadata?.name,
+              ocds?["karpenterSQS"]?.Resource?.status?.atProvider?.name,
+              _ProvCfgHelmName
+            )] if (helper._ready(ocds?["k8sCluster"]) and _ProvCfgHelmName) or ocds?["karpenterChart"] else []
+
+            _statusAccountId = regex.replace(ocds?["karpenterInstanceNodeRole"]?.Resource?.status?.atProvider?.arn, "arn:aws:iam::(\d+):.*", "$1")
+            _items += _helper_karpenter_pod_identity(
+              ocds?["k8sCluster"]?.Resource?.metadata?.name,
+              ocds?["karpenterSQS"]?.Resource?.status?.atProvider?.arn,
+              ocds?["karpenterInstanceNodeRole"]?.Resource?.status?.atProvider?.arn,
+              _statusAccountId
+            ) if (helper._ready(ocds?["k8sCluster"]) and helper._ready(ocds?["karpenterSQS"]) and _statusAccountId) or ocds?["podIdentityRole"] else []
+
+            _instanceProfileName = regex.replace(
+              ocds?["karpenterInstanceProfile"]?.Resource?.status?.atProvider?.arn, 
+              "arn:aws:iam::\\d+:instance-profile/(.+)", 
+              "$1"
+            )
+            _provCfgK8sName = ocds?["providerConfigKubernetes"]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+            _items += [
+              _helper_karpenter_node_class(i, ng, _instanceProfileName , _provCfgK8sName) for i, ng in _nodeGroups
+            ] if (helper._ready(ocds?["k8sCluster"]) and helper._ready(ocds?["karpenterInstanceProfile"]) and _provCfgK8sName) or ocds?["karpenterNodeClassPublic"] else []
+
+            _items += [
+              _helper_karpenter_node_pools(i, ng, _provCfgK8sName) for i, ng in _nodeGroups
+            ] if (helper._ready(ocds?["k8sCluster"]) and _provCfgK8sName) or ocds?["karpenterNodePoolPublic0"] else []
+
+            ##### ###### ###### #####
 
             _providerConfigTypes = ["helm", "kubernetes"]
             _items += [
@@ -207,11 +296,7 @@ spec:
             _items += [
               k8sv1a2.Object{
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels,
-                  }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("eksKubeconfigSecret"),
                   },
                 },
@@ -222,17 +307,13 @@ spec:
                       apiVersion = "v1",
                       kind = "Secret",
                       metadata = {
-                        name = "k8s-eks-{}".format(oxr.metadata.name),
+                        name = "k8s-eks-{}".format(_oxrName),
                         namespace = _ns,
                         labels = {
-                          **oxr.metadata?.labels,
                           **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                           "skycluster.io/secret-type" = "k8s-connection-data",
-                          "skycluster.io/cluster-name" = oxr.metadata.name,
+                          "skycluster.io/cluster-name" = _oxrName,
                           "skycluster.io/provider-platform" = "aws"
-                        },
-                        annotations = {
-                          **oxr.metadata?.annotations,
                         },
                       },
                       "type" = "Opaque",
@@ -289,13 +370,10 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId) 
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("secGroupRuleUdp{}-{}-{}".format(_i, port.fromPort, port.toPort)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -322,13 +400,10 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("secGroupRule{}".format(_i)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -349,25 +424,44 @@ spec:
             ] if all_true(_sshSecGroupIds) else []
 
 
+            extraItems = {
+              apiVersion = "meta.krm.kcl.dev/v1alpha1"
+              kind = "ExtraResources"
+              requirements = {
+                "securityGroups" = {
+                  apiVersion: "ec2.aws.upbound.io/v1beta1",
+                  kind: "SecurityGroup",
+                  matchLabels: {
+                    "skycluster.io/managed-by": "skycluster",
+                    "skycluster.io/provider-platform": "aws",
+                    "skycluster.io/provider-region": _oxrProvRegion,
+                    "skycluster.io/provider-zone": _oxrProvZone,
+                    "skycluster.io/secgroup-type": "default"
+                  }
+                }
+              }
+            }
+
             dxr = {
               **option("params").dxr,
               status = {
                 serviceCidr = oxr.spec?.serviceCidr
                 podCidr = oxr.spec?.podCidr?.cidr
                 # For easier access to cluster:
-                clusterSecretName = ocds?["eksKubeconfigSecret"]?.Resource?.status?.atProvider?.manifest?.metadata?.name or Undefined
-                externalClusterName = ocds?["k8sCluster"]?.Resource?.metadata?.name
+                if ocds?["eksKubeconfigSecret"]?.Resource?.status?.atProvider?.manifest?.metadata?.name:
+                  clusterSecretName = ocds?["eksKubeconfigSecret"]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                if ocds?["k8sCluster"]?.Resource?.metadata?.name:
+                  externalClusterName = ocds?["k8sCluster"]?.Resource?.metadata?.name
                 controllers = [{publicIp = ocds?["k8sCluster"]?.Resource?.status?.atProvider?.endpoint or Undefined}]
                 providerConfigs = {
                   k8s: ocds?["providerConfigKubernetes"]?.Resource?.status?.atProvider?.manifest?.metadata?.name or Undefined
                   helm: ocds?["providerConfigHelm"]?.Resource?.status?.atProvider?.manifest?.metadata?.name or Undefined
                 }
+                log = json.encode(_xSetup?.status?.keypair) or "empty",
               }
-              # status.log = yaml.encode(ocds?["eksKubeconfigSecret"]?.Resource?.statys?.atProvider?.manifest?.metadata?.name),
             }
 
-
-            items =  [*_items, dxr]
+            items =  [*_items, dxr, extraItems]
 
 
             #
@@ -378,19 +472,16 @@ spec:
               eksv1beta2.Cluster {
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
                   forProvider = {
                     region = _oxrProvRegion
-                    version = "1.32"
+                    version = "1.33"
                     accessConfig = {
                       authenticationMode = "API_AND_CONFIG_MAP"
                       bootstrapClusterCreatorAdminPermissions = True
@@ -414,7 +505,7 @@ spec:
                       }
                       subnetIdSelector = {
                         matchLabels = {
-                          "skycluster.io/cluster-name" = oxr.metadata.name
+                          "skycluster.io/cluster-name" = _oxrName
                         }
                       }
                     }
@@ -439,7 +530,7 @@ spec:
                     dependsOn = {
                       apiVersion = "v1"
                       kind = "Secret"
-                      name = "k8s-eks-{}".format(oxr.metadata.name)
+                      name = "k8s-eks-{}".format(_oxrName)
                       namespace = _ns
                     }
                   }]
@@ -449,11 +540,11 @@ spec:
                       apiVersion = "{}.crossplane.io/{}".format(t, "v1beta1" if t == "helm" else "v1alpha1"),
                       kind = "ProviderConfig",
                       metadata = {
-                        name = "k8s-eks-{}".format(oxr.metadata.name),
+                        name = "k8s-eks-{}".format(_oxrName),
                         namespace = _ns,
                         labels = {
                           "skycluster.io/managed-by" = "skycluster"
-                          "skycluster.io/cluster-name" = oxr.metadata.name
+                          "skycluster.io/cluster-name" = _oxrName
                           "skycluster.io/config-type" = "{}-connection-data".format("k8s" if t == "kubernetes" else "helm")
                         },
                       },
@@ -461,7 +552,7 @@ spec:
                         credentials = {
                           source = "Secret"
                           secretRef = {
-                            name = "k8s-eks-{}".format(oxr.metadata.name)
+                            name = "k8s-eks-{}".format(_oxrName)
                             namespace = _ns,
                             key = "kubeconfig"
                           }
@@ -478,11 +569,9 @@ spec:
               eksv1beta1.Addon{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("eks-pod-identity-agent-addon"),
                     **helper._is_paused_label(oxr.metadata.labels)
                   }
@@ -501,13 +590,10 @@ spec:
               eksv1beta1.Addon{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("vpc-cni-addon"),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -526,13 +612,10 @@ spec:
               eksv1beta1.Addon{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("aws-ebs-csi-driver-addon"),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -551,13 +634,10 @@ spec:
                 # force recreate when principalArn changes
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(crypto.sha256("apc{}".format(arn))),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -566,9 +646,14 @@ spec:
                     accessScope: {
                       type: "cluster"
                     }
-                    clusterNameSelector .matchControllerRef = True
+                    clusterNameSelector = {
+                      matchControllerRef = True
+                    }
                     policyArn: "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
                     principalArnSelector = {
+                      matchLabels = {
+                        "skycluster.io/access-entry" = "standard"
+                      }
                       matchControllerRef = True
                     }
                   }
@@ -581,13 +666,11 @@ spec:
                 # force recreate when principalArn changes
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
+                    "skycluster.io/access-entry" = "standard"
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(crypto.sha256("accEntry{}".format(arn))),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -607,14 +690,11 @@ spec:
               iamv1beta1.Role {
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/iam-role" = "controlplane"
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -640,15 +720,66 @@ spec:
               }
             }
 
+            _helper_ebs_role = lambda {
+              _items = []
+              _items += [
+                eksv1beta1.PodIdentityAssociation {
+                  metadata = {
+                    labels = {
+                      **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
+                    }
+                    annotations = {
+                      **helper._set_resource_name("ebsCSIDriverPodIdentityAssociation"),
+                    }
+                  }
+                  spec: _defaults | {
+                    forProvider = {
+                      region = _oxrProvRegion
+                      clusterNameSelector.matchControllerRef = True
+                      namespace = "kube-system"
+                      serviceAccount = "ebs-csi-controller-sa"
+                      roleArnSelector = {
+                        matchControllerRef = True
+                        matchLabels = {
+                          role = "ebs-csi-driver"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+              _items += [
+                iamv1beta1.Role {
+                  metadata = {
+                    labels = {
+                      **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
+                      role = "ebs-csi-driver"
+                    }
+                    annotations = {
+                      **helper._set_resource_name("ebsCSIDriverRole"),
+                      **helper._is_paused_label(oxr.metadata.labels)
+                    }
+                  }
+                  spec: _defaults | {
+                    forProvider = {
+                      forceDetachPolicies = True
+                      managedPolicyArns = [
+                        "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+                      ]
+                      assumeRolePolicy = _helper_ebs_driver_policy
+                  }
+                }
+              }]
+              _items
+            }
+
             _helper_cluster_auth = lambda s {
               eksv1beta1.ClusterAuth{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
                     **helper._is_paused_label(oxr.metadata.labels)
                   }
@@ -659,25 +790,42 @@ spec:
                     clusterNameSelector.matchControllerRef = True
                   }
                   writeConnectionSecretToRef = {
-                    name = "k8s-eks-auth-{}".format(oxr.metadata.name)
+                    name = "k8s-eks-auth-{}".format(_oxrName)
                     namespace = _connectionSecretNamespace
                   }
                 }
               }
             }
 
-            _helper_node_group = lambda i, ng {
+            _helper_launch_template = lambda {
+              ec2v1beta1.LaunchTemplate{
+                metadata = {
+                  labels = {
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
+                  }
+                  annotations = {
+                    **helper._set_resource_name("lnchTemplatePublic"),
+                  }
+                }
+                spec = _defaults | {
+                  forProvider = {
+                    region = _oxrProvRegion
+                    keyName = _xSetup?.status?.keypair?.id
+                    vpcSecurityGroupIds = [sg.Resource?.status?.atProvider?.id for sg in _secGroups]
+                  }
+                }
+              }
+            }
+
+            _helper_node_group = lambda i, ng, ltName {
               eksv1beta2.NodeGroup{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/public-subnet" = "true" if ng.publicAccess else "false"
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("nodeGroup{}{}".format("Public" if ng.publicAccess else "Private", i)),
-                    **helper._is_paused_label(oxr.metadata.labels)
                   }
                 }
                 spec: _defaults | {
@@ -695,32 +843,28 @@ spec:
                         "skycluster.io/iam-role" = "nodegroup"
                       }
                     }
+                    launchTemplate = {
+                      name = ltName
+                    }
                     scalingConfig = {
                       minSize = ng.autoScaling?.minSize or 1
-                      maxSize = (ng.autoScaling?.maxSize if not ng.publicAccess else 1) or 10
+                      maxSize = ng.autoScaling?.maxSize or 10
                     }
                     labels = {
                       **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                       **{
+                        if _provSettings?.metadata?.labels?["skycluster.io/provider-profile"]:
+                          "skycluster.io/provider-profile" = _provSettings.metadata.labels["skycluster.io/provider-profile"]
                         "skycluster.io/public-subnet" = "true"
                         "submariner.io/gateway" = "true"
                       } if ng.publicAccess else {
                         "skycluster.io/public-subnet" = "false"
                       },
                     }
-                    remoteAccess = {
-                      ec2SshKey = _xSetup?.status?.keypair?.id
-                      sourceSecurityGroupIdSelector = {
-                        matchLabels = {
-                          **helper._filter_default_labels(oxr.metadata.labels)
-                          "skycluster.io/secgroup-type" = "default",
-                        }
-                      }
-                    }
                     instanceTypes = ng.instanceTypes or ["t3.medium"]
                     subnetIdSelector.matchLabels = {
                       "skycluster.io/public-subnet" = "true" if ng.publicAccess else "false"
-                      "skycluster.io/cluster-name" = oxr.metadata.name
+                      "skycluster.io/cluster-name" = _oxrName
                     }
                   }
                 }
@@ -731,14 +875,11 @@ spec:
               ec2v1beta1.Subnet{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     "skycluster.io/public-subnet" = "false" if s.type == "private" else "true",
-                    "skycluster.io/cluster-name" = oxr.metadata.name
+                    "skycluster.io/cluster-name" = _oxrName
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("subnet{}{}".format("Private" if s.type == "private" else "Public", i)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -748,6 +889,10 @@ spec:
                     availabilityZone = s.zone,
                     vpcIdSelector.matchLabels = {
                       **helper._filter_default_labels(oxr.metadata.labels)
+                    }
+                    tags = {
+                      "skycluster.io/public-subnet" = "false" if s.type == "private" else "true",
+                      "skycluster.io/cluster-name" = _oxrName
                     }
                     mapPublicIpOnLaunch = True if s.type == "public" else False,
                   },
@@ -762,12 +907,10 @@ spec:
               iamv1beta1.Role{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels,
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
                     "skycluster.io/iam-role" = "nodegroup"
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name(s),
                     **helper._is_paused_label(oxr.metadata.labels)
                   }
@@ -802,13 +945,11 @@ spec:
               ec2v1beta1.RouteTable{
                 metadata = {
                   labels = {
-                    "skycluster.io/cluster-name" = oxr.metadata.name
+                    "skycluster.io/cluster-name" = _oxrName
                     "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route-table".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -829,13 +970,11 @@ spec:
               ec2v1beta1.RouteTableAssociation{
                 metadata = {
                   labels = {
-                    "skycluster.io/cluster-name" = oxr.metadata.name
+                    "skycluster.io/cluster-name" = _oxrName
                     "skycluster.io/public-subnet" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route-table-association".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -843,13 +982,13 @@ spec:
                     region = _oxrProvRegion,
                     routeTableIdSelector = {
                       matchLabels = {
-                        "skycluster.io/cluster-name" = oxr.metadata.name
+                        "skycluster.io/cluster-name" = _oxrName
                         "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                       },
                     },
                     subnetIdSelector = {
                       matchLabels = {
-                        "skycluster.io/cluster-name" = oxr.metadata.name
+                        "skycluster.io/cluster-name" = _oxrName
                         "skycluster.io/public-subnet" = "true" if t == "public" else "false",
                       },
                     },
@@ -865,13 +1004,11 @@ spec:
               ec2v1beta1.Route{
                 metadata = {
                   labels = {
-                    "skycluster.io/cluster-name" = oxr.metadata.name
+                    "skycluster.io/cluster-name" = _oxrName
                     "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("{}-route".format("public" if t == "public" else "private")),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -880,7 +1017,7 @@ spec:
                     region = _oxrProvRegion,
                     routeTableIdSelector = {
                       matchLabels = {
-                        "skycluster.io/cluster-name" = oxr.metadata.name
+                        "skycluster.io/cluster-name" = _oxrName
                         "skycluster.io/public-route-table" = "true" if t == "public" else "false",
                       },
                     },
@@ -902,6 +1039,655 @@ spec:
                   },
                 }
               }
+            }
+
+            _helper_karpenter_roles = lambda _id {
+              [
+                iamv1beta1.Role{
+                  metadata = {
+                    labels = {
+                      role = "karpenter"
+                    }
+                    annotations = {
+                      **helper._set_resource_name("karpenterInstanceNodeRole"),
+                    }
+                    generateName = "kp-{}-".format(_id)
+                  },
+                  spec: _defaults | {
+                    forProvider = {
+                      assumeRolePolicy = json.encode({
+                        Version = "2012-10-17",
+                        Statement = [
+                          {
+                            Effect = "Allow",
+                            Principal = { Service = ["ec2.amazonaws.com"] },
+                            Action = ["sts:AssumeRole"]
+                          }
+                        ]
+                      }),
+                      forceDetachPolicies = True
+                    },
+                    providerConfigRef = {
+                      name = _provCfg.metadata.name
+                    }
+                  }
+                }
+
+                # Attach standard policies to the Karpenter node role
+                iamv1beta1.RolePolicyAttachment{
+                  metadata = {
+                    annotations = {
+                      **helper._set_resource_name("karpenterNodeRoleEKSPolicy")
+                    }
+                  },
+                  spec = {
+                    forProvider = {
+                      policyArn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+                      roleSelector = { matchControllerRef = True, matchLabels = { role = "karpenter" } }
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                iamv1beta1.RolePolicyAttachment{
+                  metadata = { annotations = { **helper._set_resource_name("karpenterNodeRoleCNIPolicy") } },
+                  spec = {
+                    forProvider = {
+                      policyArn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+                      roleSelector = { matchControllerRef = True, matchLabels = { role = "karpenter" } }
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                iamv1beta1.RolePolicyAttachment{
+                  metadata = { annotations = { **helper._set_resource_name("karpenterNodeRoleECRPolicy") } },
+                  spec = {
+                    forProvider = {
+                      policyArn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+                      roleSelector = { matchControllerRef = True, matchLabels = { role = "karpenter" } }
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                iamv1beta1.RolePolicyAttachment{
+                  metadata = { annotations = { **helper._set_resource_name("karpenterNodeRoleSSMPolicy") } },
+                  spec = {
+                    forProvider = {
+                      policyArn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                      roleSelector = { matchControllerRef = True, matchLabels = { role = "karpenter" } }
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                # InstanceProfile for Karpenter nodes
+                iamv1beta1.InstanceProfile{
+                  metadata = {
+                    annotations = { **helper._set_resource_name("karpenterInstanceProfile") }
+                  },
+                  spec = {
+                    forProvider = {
+                      roleSelector = { matchControllerRef = True, matchLabels = { role = "karpenter" } }
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+
+                # AccessEntry to allow Karpenter to interact with cluster (uses eks AccessEntry)
+                eksv1beta1.AccessEntry{
+                  metadata = {
+                    annotations = { **helper._set_resource_name("karpenterAccessEntry") }
+                  },
+                  spec: _defaults | {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      type = "EC2_LINUX",
+                      clusterNameSelector = {
+                        matchControllerRef = True,
+                      },
+                      # principalArnFromRoleSelector will match the role we create above
+                      principalArnFromRoleSelector = {
+                        matchControllerRef = True,
+                        matchLabels = { role = "karpenter" }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+
+            _helper_karpenter_sqs_cloudwatch = lambda s {
+              [
+                # SQS Queue for interruption/notifications consumed by Karpenter
+                sqsv1beta1.Queue{
+                  metadata = {
+                    annotations = { **helper._set_resource_name("karpenterSQS") }
+                  },
+                  spec = {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      name = "kp-{}-queue".format(s),
+                      messageRetentionSeconds = 300
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+
+                # CloudWatch Event Rules (Health, Rebalance, State-change, Spot Interrupt)
+                cloudwatcheventsv1beta1.Rule{
+                  metadata = {
+                    annotations = { 
+                      **helper._set_resource_name("karpenterRuleHealthEvent"), 
+                      "crossplane.io/external-name" = "kp-health-{}".format(s) }
+                    labels = {"crossplane.io/composite" = _oxrName, "type" = "HealthEvent"}
+                    name = "kp-health-{}".format(s)
+                  },
+                  spec = {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      eventBusName = "default",
+                      eventPattern = json.encode({ source = ["aws.health"], "detail-type" = ["AWS Health Event"] })
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                cloudwatcheventsv1beta1.Rule{
+                  metadata = {
+                    annotations = { 
+                      **helper._set_resource_name("karpenterRuleInstanceRebalance"), 
+                      "crossplane.io/external-name" = "kp-irb-{}".format(s) }
+                    labels = {"crossplane.io/composite" = _oxrName, "type" = "InstanceRebalance"}
+                    name = "kp-irb-{}".format(s)
+                  },
+                  spec = {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      eventBusName = "default",
+                      eventPattern = json.encode({ source = ["aws.ec2"], "detail-type" = ["EC2 Instance Rebalance Recommendation"] })
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                cloudwatcheventsv1beta1.Rule{
+                  metadata = {
+                    annotations = { 
+                      **helper._set_resource_name("karpenterRuleInstanceStateChange"), 
+                      "crossplane.io/external-name" = "kp-isc-{}".format(s) }
+                    labels = {"crossplane.io/composite" = _oxrName, "type" = "InstanceStateChange"}
+                    name = "kp-isc-{}".format(s)
+                  },
+                  spec = {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      eventBusName = "default",
+                      eventPattern = json.encode({ source = ["aws.ec2"], "detail-type" = ["EC2 Instance State-change Notification"] })
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+                cloudwatcheventsv1beta1.Rule{
+                  metadata = {
+                    annotations = { 
+                      **helper._set_resource_name("karpenterRuleSpotInterrupt"), 
+                      "crossplane.io/external-name" = "kp-si-{}".format(s) }
+                    labels = {"crossplane.io/composite" = _oxrName, "type" = "SpotInterrupt"}
+                    name = "kp-si-{}".format(s)
+                  },
+                  spec = {
+                    forProvider = {
+                      region = _oxrProvRegion,
+                      eventBusName = "default",
+                      eventPattern = json.encode({ source = ["aws.ec2"], "detail-type" = ["EC2 Spot Instance Interruption Warning"] })
+                    },
+                    providerConfigRef = { name = _provCfg.metadata.name },
+                    deletionPolicy = _defaults.deletionPolicy
+                  }
+                }
+              ]
+            }
+
+            _helper_karpenter_pod_identity = lambda _clusterName, _sqsQueueArn, _instanceNodeRoleArn, _accountId {
+              [
+                iamv1beta1.Role{
+                  metadata = {
+                    annotations = { **helper._set_resource_name("podIdentityRole") }
+                    labels = {
+                      role = "pod-identity" 
+                    }
+                  },
+                  spec = _defaults | {
+                    forProvider = {
+                      inlinePolicy = [
+                        {
+                          name = "default"
+                          policy = json.encode({
+                              "Version": "2012-10-17"
+                              "Statement": [
+                                {
+                                  "Sid": "AllowScopedEC2InstanceActions"
+                                  "Effect": "Allow"
+                                  "Resource": [
+                                    "arn:aws:ec2:${_oxrProvRegion}::image/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}::snapshot/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:spot-instances-request/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:security-group/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:subnet/*"
+                                  ]
+                                  "Action": [
+                                      "ec2:RunInstances"
+                                      "ec2:CreateFleet"
+                                  ]
+                                }
+                                {
+                                  "Sid": "AllowScopedEC2LaunchTemplateAccessActions"
+                                  "Effect": "Allow"
+                                  "Resource": "arn:aws:ec2:${_oxrProvRegion}:*:launch-template/*"
+                                  "Action": [
+                                    "ec2:RunInstances"
+                                    "ec2:CreateFleet"
+                                  ]
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:ResourceTag/kubernetes.io/cluster/${_clusterName}": "owned"
+                                    }
+                                    "StringLike": {
+                                      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowScopedEC2InstanceActionsWithTags"
+                                  "Effect": "Allow"
+                                  "Resource": [
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:fleet/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:instance/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:volume/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:network-interface/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:launch-template/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:spot-instances-request/*"
+                                  ]
+                                  "Action": [
+                                    "ec2:RunInstances"
+                                    "ec2:CreateFleet"
+                                    "ec2:CreateLaunchTemplate"
+                                  ]
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:RequestTag/kubernetes.io/cluster/${_clusterName}": "owned"
+                                      "aws:RequestTag/eks:eks-cluster-name": _clusterName
+                                    }
+                                    "StringLike": {
+                                      "aws:RequestTag/karpenter.sh/nodepool": "*"
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowScopedResourceCreationTagging"
+                                  "Effect": "Allow"
+                                  "Resource": [
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:fleet/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:instance/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:volume/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:network-interface/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:launch-template/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:spot-instances-request/*"
+                                  ]
+                                  "Action": "ec2:CreateTags"
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:RequestTag/kubernetes.io/cluster/${_clusterName}": "owned"
+                                      "aws:RequestTag/eks:eks-cluster-name": _clusterName
+                                      "ec2:CreateAction": [
+                                        "RunInstances"
+                                        "CreateFleet"
+                                        "CreateLaunchTemplate"
+                                      ]
+                                    }
+                                    "StringLike": {
+                                      "aws:RequestTag/karpenter.sh/nodepool": "*"
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowScopedResourceTagging"
+                                  "Effect": "Allow"
+                                  "Resource": "arn:aws:ec2:${_oxrProvRegion}:*:instance/*"
+                                  "Action": "ec2:CreateTags"
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:ResourceTag/kubernetes.io/cluster/${_clusterName}": "owned"
+                                    }
+                                    "StringLike": {
+                                      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+                                    }
+                                    "StringEqualsIfExists": {
+                                      "aws:RequestTag/eks:eks-cluster-name": _clusterName
+                                    }
+                                    "ForAllValues:StringEquals": {
+                                      "aws:TagKeys": [
+                                        "eks:eks-cluster-name"
+                                        "karpenter.sh/nodeclaim"
+                                        "Name"
+                                      ]
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowScopedDeletion"
+                                  "Effect": "Allow"
+                                  "Resource": [
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:instance/*"
+                                    "arn:aws:ec2:${_oxrProvRegion}:*:launch-template/*"
+                                  ]
+                                  "Action": [
+                                    "ec2:TerminateInstances"
+                                    "ec2:DeleteLaunchTemplate"
+                                  ]
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:ResourceTag/kubernetes.io/cluster/${_clusterName}": "owned"
+                                    }
+                                    "StringLike": {
+                                      "aws:ResourceTag/karpenter.sh/nodepool": "*"
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowRegionalReadActions"
+                                  "Effect": "Allow"
+                                  "Resource": "*"
+                                  "Action": [
+                                    "ec2:DescribeAvailabilityZones"
+                                    "ec2:DescribeImages"
+                                    "ec2:DescribeInstances"
+                                    "ec2:DescribeInstanceTypeOfferings"
+                                    "ec2:DescribeInstanceTypes"
+                                    "ec2:DescribeLaunchTemplates"
+                                    "ec2:DescribeSecurityGroups"
+                                    "ec2:DescribeSpotPriceHistory"
+                                    "ec2:DescribeSubnets"
+                                  ]
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "aws:RequestedRegion": _oxrProvRegion
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowSSMReadActions"
+                                  "Effect": "Allow"
+                                  "Resource": "arn:aws:ssm:${_oxrProvRegion}::parameter/aws/service/*"
+                                  "Action": "ssm:GetParameter"
+                                }
+                                {
+                                  "Sid": "AllowPricingReadActions"
+                                  "Effect": "Allow"
+                                  "Resource": "*"
+                                  "Action": "pricing:GetProducts"
+                                }
+                                {
+                                  "Sid": "AllowInterruptionQueueActions"
+                                  "Effect": "Allow"
+                                  "Resource": _sqsQueueArn
+                                  "Action": [
+                                    "sqs:DeleteMessage"
+                                    "sqs:GetQueueUrl"
+                                    "sqs:ReceiveMessage"
+                                  ]
+                                }
+                                {
+                                  "Sid": "AllowPassingInstanceRole"
+                                  "Effect": "Allow"
+                                  "Resource": _instanceNodeRoleArn
+                                  "Action": "iam:PassRole"
+                                  "Condition": {
+                                    "StringEquals": {
+                                      "iam:PassedToService": "ec2.amazonaws.com"
+                                    }
+                                  }
+                                }
+                                {
+                                  "Sid": "AllowAPIServerEndpointDiscovery"
+                                  "Effect": "Allow"
+                                  "Resource": "arn:aws:eks:${_oxrProvRegion}:${_accountId}:cluster/${_clusterName}"
+                                  "Action": "eks:DescribeCluster"
+                                }
+                              ]
+                            })
+                            }
+                        ]
+                      assumeRolePolicy = _helper_pod_identity_policy
+                    }
+                  }
+                }
+
+                eksv1beta1.PodIdentityAssociation{
+                  metadata = {
+                    annotations = { **helper._set_resource_name("podIdentityAssociation") }
+                  },
+                  spec = _defaults | {
+                    forProvider = {
+                        region = _oxrProvRegion
+                        roleArnSelector: {
+                          matchControllerRef = True
+                          matchLabels = { role = "pod-identity" }
+                        }
+                        clusterNameSelector = {
+                          matchControllerRef = True
+                        }
+                        serviceAccount = "karpenter"
+                        namespace = "karpenter"
+                    }
+                  }
+                }
+              ]
+            }
+
+            _helper_karpenter_helm = lambda _clusterName, _queueName, helmProvCfgName {
+              helmv1b1.Release{
+                metadata = {
+                  labels = {
+                    "skycluster.io/managed-by": "skycluster",
+                  },
+                  annotations = {
+                    **helper._set_resource_name("karpenterChart"),
+                    "crossplane.io/external-name" = "karpenter"
+                  }
+                }
+                spec = {
+                  forProvider = {
+                    chart = {
+                      name = "karpenter"
+                      repository = "oci://public.ecr.aws/karpenter"
+                      version = "1.3.4"
+                    }
+                    namespace = "karpenter"
+                    values = {
+                      settings = {
+                        clusterName = _clusterName
+                        interruptionQueueName = _queueName
+                      }
+                    }
+                    set = [{
+                      name = "replicas"
+                      value = "1"
+                    }]
+                  }
+                  providerConfigRef = {
+                    name = helmProvCfgName
+                  }
+                }
+              }
+            }
+
+            _helper_karpenter_node_class = lambda i, ng, _instanceProfileName, _k8sProvCfgName {
+              k8sv1a2.Object{
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name("karpenterNodeClass{}{}".format("Public" if ng.publicAccess else "Private", i))
+                  }
+                  labels = { "skycluster.io/public-subnet" = "true" if ng.publicAccess else "false" }
+                },
+                spec = {
+                  deletionPolicy = "Orphan"
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "karpenter.k8s.aws/v1",
+                      kind = "EC2NodeClass",
+                      metadata = { name = "public" if ng.publicAccess else "private" },
+                      spec = {
+                        amiFamily = "AL2"
+                        amiSelectorTerms = [{
+                          alias = "al2@latest"
+                        }]
+                        tags = {
+                          if _provSettings?.metadata?.labels?["skycluster.io/provider-profile"]:
+                            "skycluster.io/provider-profile" = _provSettings.metadata.labels["skycluster.io/provider-profile"]
+                          KarpenterNodePoolName = "public" if ng.publicAccess else "private"
+                          # NodeType = "default",
+                          # intent = "apps",
+                          # "karpenter.sh/discovery" = _clusterName
+                        },
+                        subnetSelectorTerms = [{
+                          tags = {
+                            "skycluster.io/public-subnet" = "true" if ng.publicAccess else "false"
+                            "skycluster.io/cluster-name" = _oxrName
+                          }}
+                        ],
+                        securityGroupSelectorTerms = [{
+                          tags = {
+                            **helper._filter_default_labels(oxr.metadata.labels)
+                            "skycluster.io/secgroup-type" = "default",
+                          }}
+                        ],
+                        instanceProfile = _instanceProfileName
+                        if _xSetup?.status?.keypair?.publicKey:
+                          userData = _helper_user_data(_xSetup?.status?.keypair?.publicKey)
+                      }
+                    }
+                  },
+                  providerConfigRef = { name = _k8sProvCfgName }
+                }
+              }
+            }
+
+            _helper_karpenter_node_pools = lambda i, ng, _k8sProvCfgName {
+              k8sv1a2.Object{
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name("karpenterNodePool{}{}".format("Public" if ng.publicAccess else "Private", i))
+                  }
+                  labels = {
+                    "skycluster.io/public-subnet" = "true" if ng.publicAccess else "false"
+                  }
+                },
+                spec = {
+                  deletionPolicy = "Orphan"
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "karpenter.sh/v1",
+                      kind = "NodePool",
+                      metadata = { 
+                        name = "np-{}-{}".format("public" if ng.publicAccess else "private", i), 
+                      },
+                      spec = {
+                        disruption = {
+                          consolidateAfter = "1m",
+                          consolidationPolicy = "WhenEmptyOrUnderutilized"
+                        },
+                        limits = {
+                          cpu = 1000,
+                          memory = "500Gi"
+                        },
+                        template = {
+                          metadata.labels = {
+                            **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+                            **{
+                              "skycluster.io/public-subnet" = "true"
+                              "submariner.io/gateway" = "true"
+                            } if ng.publicAccess else {
+                              "skycluster.io/public-subnet" = "false"
+                            },
+                            if _provSettings?.metadata?.labels?["skycluster.io/provider-profile"]:
+                              "skycluster.io/provider-profile" = _provSettings.metadata.labels["skycluster.io/provider-profile"]
+                          }
+                          spec = {
+                            nodeClassRef = {
+                              group = "karpenter.k8s.aws",
+                              kind = "EC2NodeClass",
+                              name = "public" if ng.publicAccess else "private"
+                            },
+                            requirements = [
+                              # { key = "karpenter.k8s.aws/instance-category", operator = "In", values = ["c","m","r","i","d"] },
+                              # { key = "karpenter.k8s.aws/instance-cpu", operator = "In", values = ["4","8"] },
+                              # { key = "karpenter.sh/capacity-type", operator = "In", values = ["spot","on-demand"] },
+                              { key = "node.kubernetes.io/instance-type", operator = "In", values = ng.instanceTypes or ["t3.medium"] },
+                              { key = "kubernetes.io/arch", operator = "In", values = ["amd64"] }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  providerConfigRef = { name = _k8sProvCfgName }
+                }
+              }
+            }
+
+            _helper_ebs_driver_policy = """\
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "pods.eks.amazonaws.com"
+                        },
+                        "Action": [
+                            "sts:AssumeRole",
+                            "sts:TagSession"
+                        ]
+                    }
+                ]
+            }
+            """
+
+            _helper_pod_identity_policy = """\
+            {
+                "Version":"2012-10-17",
+                "Statement":[
+                    {
+                    "Sid":"AllowEksAuthToAssumeRoleForPodIdentity",
+                    "Effect":"Allow",
+                    "Principal":{
+                        "Service":"pods.eks.amazonaws.com"
+                    },
+                    "Action":[
+                        "sts:AssumeRole",
+                        "sts:TagSession"
+                    ]
+                    }
+                ]
+            }"""
+
+            _helper_user_data = lambda k {
+            """\
+            #!/bin/bash
+            mkdir -p ~ec2-user/.ssh/
+            touch ~ec2-user/.ssh/authorized_keys
+            cat >> ~ec2-user/.ssh/authorized_keys <<EOF
+            {k}
+            EOF
+            chmod -R go-w ~ec2-user/.ssh/authorized_keys
+            chown -R ec2-user ~ec2-user/.ssh    
+            """.format(k)
             }
     - step: function-auto-ready
       functionRef:

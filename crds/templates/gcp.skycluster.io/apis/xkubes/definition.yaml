@@ -35,8 +35,10 @@ spec:
                         minSize:
                           type: number
                       type: object
-                    instanceType:
-                      type: string
+                    instanceTypes:
+                      items:
+                        type: string
+                      type: array
                     nodeCount:
                       type: number
                     publicAccess:
@@ -62,6 +64,8 @@ spec:
                         type: string
                     type: object
                 type: object
+              serviceCidr:
+                type: string
             type: object
           status:
             description: XKubeStatus defines the observed state of XKube.

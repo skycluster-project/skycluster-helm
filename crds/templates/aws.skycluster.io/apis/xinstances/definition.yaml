@@ -25,6 +25,8 @@ spec:
                 type: string
               image:
                 type: string
+              preferSpot:
+                type: boolean
               providerRef:
                 properties:
                   platform:
@@ -94,6 +96,10 @@ spec:
                   publicIp:
                     type: string
                 type: object
+              providerName:
+                type: string
+              spotInstance:
+                type: boolean
             type: object
         required:
         - spec

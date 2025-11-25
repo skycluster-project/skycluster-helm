@@ -1,0 +1,52 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xmeshistios.skycluster.io
+spec:
+  group: skycluster.io
+  names:
+    categories:
+    - crossplane
+    kind: XMeshIstio
+    plural: xmeshistios
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        description: XMeshIstio is the Schema for the XMeshIstio API.
+        properties:
+          spec:
+            description: XKubeMeshSpec defines the desired state of XKubeMesh.
+            properties:
+              clusterNames:
+                items:
+                  type: string
+                type: array
+              localCluster:
+                properties:
+                  podCidr:
+                    type: string
+                  serviceCidr:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: XMeshIstioStatus defines the observed state of XMeshIstio.
+            properties:
+              clusters:
+                items:
+                  properties:
+                    nameRef:
+                      type: string
+                    status:
+                      type: string
+                  type: object
+                type: array
+              log:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true

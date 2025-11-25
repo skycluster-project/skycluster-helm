@@ -38,6 +38,23 @@ spec:
                   - key: skycluster.io/managed-by
                     type: Value
                     value: skycluster
+            - kind: ConfigMap
+              into: ProviderSettings
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.platform
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
     - step: resources
       functionRef:
         name: function-kcl
@@ -69,6 +86,9 @@ spec:
 
             _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
             assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            _provSettings = _extraRes["ProviderSettings"]?[0] 
+            assert _provSettings is not Undefined, "Provider settings must be provided in the extra resources"
 
             _provCfg = _extraRes["ProviderConfig"][0]
             _skySetup = _extraRes["SkySetups"][0]
@@ -135,12 +155,12 @@ spec:
                 labels = {
                   **oxr.metadata?.labels,
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
-                  # if s.default: "skycluster.io/default-subnet" = "true"
+                   if i == 0:
+                    "skycluster.io/default-subnet" = "true"
                 }
                 annotations = {
                   **oxr.metadata?.annotations,
                   **helper._set_resource_name("subnet{}{}".format("Private" if s.type == "private" else "Public", i)),
-                  **helper._is_paused_label(oxr.metadata.labels),
                 }
               }
               spec = {
@@ -234,12 +254,18 @@ spec:
             _udpPorts = oxr.spec.udpPorts
 
             _tcpPortDefaults = [
-              {"fromPort" = 30000, "toPort" = 32767},
-              {"fromPort" = 32768, "toPort" = 60999},
+              # {"fromPort" = 30000, "toPort" = 30050},
+              # TODO: this is a very large range for ephemeral ports
+              # check if any ports needed here
+              {"fromPort" = 30000, "toPort" = 60999},
+              {"fromPort" = 15000, "toPort" = 15100} # istio envoy
+              # {"fromPort" = 30000, "toPort" = 32767},
+              # {"fromPort" = 32768, "toPort" = 60999}, 
             ]
             _tcpPortDefaults = _tcpPortDefaults + [
               {"fromPort" = port, "toPort" = port} 
-                for port in [22 80 443 6443 8080 9100 179 4789 5473 2379 10250]
+                for port in [22 80 443 6443 8080 9100 179 4789 5473 2379 10250 10901 10902 8000 8001 9000 9001]
+                # 10901 10902 for thanos query
             ]
             _tcpPortsToUse = _tcpPorts if _tcpPorts else _tcpPortDefaults
             _openPorts = [{
@@ -272,10 +298,16 @@ spec:
               spec = {
                 forProvider = {
                   allow = [
-                    *[{
-                      protocol = p.protocol
-                      ports = [str(ss) for pp in p.ports for ss in range(int(pp.fromPort), int(pp.toPort) + 1)],
-                    } for p in _openPorts], 
+                    *[
+                      {
+                        protocol = p.protocol
+                        ports = [
+                            "{}-{}".format(pp.fromPort, pp.toPort) for pp in p.ports if pp.fromPort != pp.toPort
+                          ] + [
+                            "{}".format(pp.fromPort) for pp in p.ports if pp.fromPort == pp.toPort
+                          ],
+                      } for p in _openPorts
+                    ], 
                     {"protocol" = "icmp"},
                   ]
                   networkSelector.matchControllerRef = True,
@@ -348,26 +380,31 @@ spec:
 
             dxr = {
               **option("params").dxr,
-              status.vpc = {
-                id = _vpcId
-                cidrBlock = _vpcCidr 
-              } if _vpcId else {},
-              status.subnets = [
-                {
-                  type = "public" if v.metadata?.labels?["skycluster.io/public-subnet"] and v.metadata?.labels?["skycluster.io/public-subnet"] == "true" else "private"
-                  id = v.status?.atProvider?.id
-                  cidrBlock = v.status?.atProvider?.cidrBlock
-                } for _, v in _ocdsSubnets if v
-              ]
-              status.gateway = {
-                publicIp = _publicAddress
-                privateIp = _privateAddress
-              } if _publicAddress or _privateAddress else {},
+              status = {
+                if _vpcId:
+                  vpc = {
+                    id = _vpcId
+                    cidrBlock = _vpcCidr 
+                  }
+                subnets = [
+                  {
+                    type = "public" if v.metadata?.labels?["skycluster.io/public-subnet"] and v.metadata?.labels?["skycluster.io/public-subnet"] == "true" else "private"
+                    id = v.status?.atProvider?.id
+                    cidrBlock = v.status?.atProvider?.cidrBlock
+                  } for _, v in _ocdsSubnets if v
+                ]
+                if _publicAddress or _privateAddress:
+                  gateway = {
+                    publicIp = _publicAddress or Undefined
+                    privateIp = _privateAddress or Undefined
+                  }
+                if _provSettings.metadata?.labels?["skycluster.io/provider-profile"]:
+                  providerProfileName = _provSettings.metadata?.labels["skycluster.io/provider-profile"]
+              }
             }
 
             # Collect all resources into a list for output
             items = [*_items, dxr]
-
 
 
             _helper_route_internet = lambda s {

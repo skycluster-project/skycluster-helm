@@ -1,0 +1,636 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkubes.bm.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: bm.skycluster.io/v1alpha1
+    kind: XKube
+  mode: Pipeline
+  pipeline:
+    - step: pull-extra-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            - kind: XSetup
+              into: SkySetups
+              apiVersion: skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+            - kind: ConfigMap
+              into: ConfigMaps
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: Value
+                    value: baremetal
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
+            - kind: XSetup
+              into: XSetup
+              apiVersion: bm.skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/provider-platform
+                    type: Value
+                    value: baremetal
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
+                  - key: skycluster.io/provider-zone
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.zones.primary
+                  - key: skycluster.io/application-id
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.applicationId
+            - kind: ConfigMap
+              into: InitScriptsSSH
+              apiVersion: v1
+              type: Selector
+              selector:
+                minMatch: 1
+                maxMatch: 100
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/script-type
+                    type: Value
+                    value: sshtask
+            # - kind: ConfigMap
+            #   into: Scripts
+            #   apiVersion: v1
+            #   type: Selector
+            #   selector:
+            #     maxMatch: 1
+            #     minMatch: 1
+            #     matchLabels:
+            #       - key: skycluster.io/managed-by
+            #         type: Value
+            #         value: skycluster
+            #       - key: skycluster.io/secret-type
+            #         type: Value
+            #         value: bm-gw-setup
+    - step: resources
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: basic
+        spec:
+          dependencies: |
+            helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+            provider-kubernetes = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+          source: |-
+            import yaml
+            import base64
+            import helper.v1alpha1.main as helper
+            import provider_kubernetes.v1alpha2 as k8sv1a2
+
+            oxr = option("params").oxr # observed composite resource
+            ocds = option("params")?.ocds # observed composed resources
+            extra = option("params")?.extraResources
+
+            _ns = _skySetup.spec.namespace or "skycluster-system"
+
+            _oxrProvRegion = oxr.spec.providerRef.region
+            _oxrProvZone = oxr.spec.providerRef.zones?.primary
+            _oxrProvPlatform = oxr.spec.providerRef.platform
+            _oxrAppId = oxr.spec.applicationId or Undefined
+            assert _oxrProvRegion and _oxrProvZone and _oxrProvPlatform, \
+              "Provider region, primary zone, platform must be specified"
+
+            assert oxr.metadata?.labels is not Undefined, "At least one label must be specified"
+            assert "skycluster.io/managed-by" in oxr.metadata.labels, "Label 'skycluster.io/managed-by' must be specified"
+
+            ctx = option("params")?.ctx
+            assert ctx is not Undefined, "Context must be provided in the params"
+
+            _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
+            assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            assert oxr.spec?.serviceCidr, "Service CIDR must be specified"
+            assert oxr.spec?.podCidr, "Pod CIDR must be specified"
+            assert oxr.spec?.nodes, "At least one node must be specified"
+
+            _initScriptsSSH = _extraRes["InitScriptsSSH"]
+            assert _initScriptsSSH, "Init scripts SSH must be provided in the extra resources"
+
+            _cms = _extraRes["ConfigMaps"][0]
+
+            _skySetup = _extraRes["SkySetups"][0]
+            assert _skySetup, "SkySetup resource must be provided in the extra resources"
+
+            _xSetup = _extraRes["XSetup"][0]
+            assert _xSetup, "XSetup resource must be provided in the extra resources"
+
+            _subnetCidr = _xSetup.status?.subnetCidr or Undefined
+            assert _subnetCidr, "Subnet CIDR must be specified in the XSetup status"
+
+            _k8sProvCfgName = _skySetup.status?.providerConfig?.kubernetes?.name or Undefined
+            assert _k8sProvCfgName, "Kubernetes provider config name must be specified in the SkySetup status"
+
+            _select_scripts: (any, [str]) -> any = lambda _scripts, names {
+              _selected = [s \
+                for s in _scripts \
+                  for n in names if s and n.lower() == s.metadata?.labels["skycluster.io/script-init"]
+              ]
+              assert len(_selected) == 1, "Expected exactly one script, found {}".format(len(_selected))
+              _selected[0]
+            }
+
+            _K3sControllerScript = _select_scripts(_initScriptsSSH, ["bm-k3s-controller"])
+            assert _K3sControllerScript, "K3s controller main scripts must be provided in the context"
+
+            _k3sCtrlProbSc = _K3sControllerScript?.data?["k3s_controller_prob.sh"] or Undefined  
+            _k3sCtrlEnsureSc = _K3sControllerScript?.data?["k3s_controller.sh"] or Undefined
+            assert _k3sCtrlProbSc and _k3sCtrlEnsureSc, "K3s controller scripts must be provided in the context"
+
+            _K3sAgentScript = _select_scripts(_initScriptsSSH, ["k3s-agent"])
+            assert _K3sAgentScript, "K3s agent scripts must be provided in the context"
+
+            _k3sAgentProbSc = _K3sAgentScript?.data?["probeScript.sh"] or Undefined
+            _k3sAgentEnsureSc = _K3sAgentScript?.data?["ensureScript.sh"] or Undefined
+            assert _k3sAgentEnsureSc and _k3sAgentProbSc, "K3s agent scripts must be provided in the context"
+
+            assert oxr.spec.controlPlane?.deviceNodeName, "Control plane device node name must be specified"
+
+            _gatewayNodeStr = _cms.data?["gateway"] or Undefined
+            _workerNodesStr = _cms.data?["worker"] or Undefined
+
+            _gwNodes = yaml.decode(_gatewayNodeStr) if _gatewayNodeStr else Undefined
+            _workerNodes = yaml.decode(_workerNodesStr) if _workerNodesStr else []
+
+            #
+            # Only supporting one gateway node for now
+            #
+            _gwNodeName = oxr.spec.controlPlane?.deviceNodeName
+            assert _gwNodeName, "Gateway device name must be specified"
+            assert _gwNodeName in _gwNodes, "Gateway device name '{}' not found in the configmap".format(_gwNodeName)
+
+            _workerNodeNames = oxr.spec?.nodes or []
+            assert all_true([n in _workerNodesStr for n in _workerNodeNames]), \
+              "Some worker device names not found in the configmap"
+
+            # Compare the node names with what is already in configmap
+            # and the xseup status's device nodes to ensure they match and ready
+
+            _provisionedGwNodes = {
+              n.deviceName = n for n in _xSetup.status?.deviceNodes if n.type == "gateway"
+            }
+            _provisionedWorkerNodes = {
+              n.deviceName = n for n in _xSetup.status?.deviceNodes if n.type == "worker"
+            }
+
+            # This is basically only one node for now
+            _gwNodesMap = {
+              n = {
+                **_gwNodes[n]
+                sshSecretName = _provisionedGwNodes[n]?.sshSecretName
+                ssh = { # [sshtask] to install k3s and retrieve kubeconfig and token
+                  generate = "k3s-ctrl-{}".format(n)
+                  observed = ocds?[generate]?.Resource?.metadata?.name
+                }
+                secret = { # secret (k8s object) containing kubeconfig
+                  generate = "sc-{}".format(n)
+                  observed = ocds?[generate]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                }
+                providerConfigs = { # (k8s object)
+                  ssh = {
+                    observed = _provisionedGwNodes[n]?.sshProviderConfigName
+                  }
+                  k8s = {
+                    generate = "prvCfg-{}".format(n)
+                    observed = ocds?[generate]?.Resource?.metadata?.name
+                  }
+                  helm = {
+                    generate = "helmPrvCfg-{}".format(n)
+                    observed = ocds?[generate]?.Resource?.metadata?.name
+                  }
+                }
+                secretGate = all_true([
+                  ocds?[ssh?.generate]?.Resource?.status?.atProvider?.observed?.fields?.token,
+                  ocds?[ssh?.generate]?.Resource?.status?.atProvider?.observed?.fields?.kubeconfig,
+                ])
+              } for n in [_gwNodeName] \
+                  if _gwNodes and n in _gwNodes and n in _provisionedGwNodes
+            }
+
+            #
+            # Worker nodes Map
+            #
+            _workerNodesMap: {str:any} = {
+              n = {
+                **_workerNodes[n],
+                sshSecretName = _provisionedWorkerNodes[n]?.sshSecretName,
+                ssh = { # [sshtask] to install k3s agent
+                  generate = "k3s-agent-{}".format(n)
+                  observed = ocds?[generate]?.Resource?.metadata?.name
+                }
+                providerConfigs = {
+                  ssh = {
+                    observed = _provisionedWorkerNodes[n]?.sshProviderConfigName
+                  }
+                }
+              } for n in _workerNodeNames \
+                  if _workerNodes and n in _workerNodes and n in _provisionedWorkerNodes
+            }
+
+            # Start assembling resources
+            _items = []
+
+            #
+            # For [gateway] node, we create a k3s controller installation task
+            #
+            _k3sCtrlEnsureSc = _k3sCtrlEnsureSc.replace("__SERVICE_CIDR__", oxr.spec.serviceCidr)\
+              .replace("__CLUSTER_CIDR__", oxr.spec.podCidr)\
+              .replace("__PROVIDERPLATFORM__", _oxrProvPlatform)\
+              .replace("__REGION__", _oxrProvRegion)\
+              .replace("__ZONE__", _oxrProvZone)
+
+            _items += [
+              # s, pvCfgName, pbScript, ensScript
+              _helper_ssh_task_k3s_ctrl(
+                  spec.ssh.generate,
+                  spec.providerConfigs.ssh.observed,
+                  _k3sCtrlProbSc, _k3sCtrlEnsureSc) \
+                for n, spec in _gwNodesMap \
+                  if spec.providerConfigs.ssh.observed and spec.sshSecretName or ocds?[spec.ssh.generate]
+            ] 
+
+            #
+            # Object: Controller ssh connection secret, it saves a secret containing k3s token and kubeconfig
+            # Multi controller is not yet supported
+            #
+            _items += [
+              # s, PubIp, PrivIp, kubecfgB64, token
+              _helper_cluster_secret(
+                spec.secret.generate, 
+                spec.publicIp, spec.privateIp, 
+                ocds?[spec.ssh.generate]?.Resource?.status?.atProvider?.observed?.fields?.kubeconfig,
+                ocds?[spec.ssh.generate]?.Resource?.status?.atProvider?.observed?.fields?.token) \
+                for n, spec in _gwNodesMap \
+                  if spec.secretGate or ocds?[spec.secret?.generate]
+            ]
+
+            #
+            # ProviderConfig K8S: Controller Kubernetes provider config connection 
+            # Multi controller is not yet supported
+            #
+            _items += [
+              _helper_cluster_k8s_provider_cfg(
+                spec.providerConfigs.k8s.generate,
+                spec.secret?.observed
+              ) for n, spec in _gwNodesMap \
+                if spec.secretGate or ocds?[spec.providerConfigs.k8s.generate]
+            ]
+
+            #
+            # ProviderConfig Helm: Controller helm provider config connection 
+            #
+            _items += [
+              _helper_cluster_helm_provider_cfg(
+                spec.providerConfigs.helm.generate,
+                spec.secret?.observed
+              ) for n, spec in _gwNodesMap \
+                  if spec.secretGate or ocds?[spec.providerConfigs?.helm?.generate]
+            ]
+
+            # Currently only supporting one gateway node (one k3s controller)
+            _k3sHostIP = _gwNodesMap[_gwNodeName]?.privateIp or Undefined
+            _k3sToken = ocds?[_gwNodesMap[_gwNodeName].ssh.generate]?.Resource?.status?.atProvider?.observed?.fields?.token
+            _kubeconfig = ocds?[_gwNodesMap[_gwNodeName].ssh.generate]?.Resource?.status?.atProvider?.observed?.fields?.kubeconfig
+            # Depends on K3S controller installation
+            _k3sAgentEnsureSc = _k3sAgentEnsureSc.replace("__K3STOKEN__", _k3sToken)\
+              .replace("__K3SHOSTIP__", _k3sHostIP)\
+              .replace("__PROVIDERPLATFORM__", _oxrProvPlatform)\
+              .replace("__REGION__", _oxrProvRegion)\
+              .replace("__ZONE__", _oxrProvZone)\
+              .replace("__NODE_LABELS__", "")
+              
+
+            _k3sAgentGate = all_true([_k3sHostIP, _k3sToken, _kubeconfig])
+            _items += [
+              # s, pvCfgName, pbScript, ensScript
+              _helper_ssh_task_k3s_agent(
+                  spec.ssh.generate,
+                  spec.providerConfigs.ssh.observed,
+                  _k3sAgentProbSc, _k3sAgentEnsureSc) \
+                for n, spec in _workerNodesMap \
+                  if spec.providerConfigs.ssh.observed and _k3sAgentGate or ocds?[spec.ssh.generate]
+            ]
+
+
+            # # extraItems = {
+            # #   apiVersion = "meta.krm.kcl.dev/v1alpha1"
+            # #   kind = "ExtraResources"
+            # #   requirements = {
+            # #     **{"bmPrivateKeySecrets" = {
+            # #         apiVersion: "v1",
+            # #         kind: "Secret",
+            # #         # we cannot use matchName because the secret is namespaced
+            # #         # hence we filter by label instead and check the name later
+            # #         matchLabels = {
+            # #           "skycluster.io/managed-by" = "skycluster",
+            # #           "skycluster.io/secret-type" = "onpremise-keypair"
+            # #         }
+            # #     }}
+            # #   }
+            # # }
+
+            dxr = {
+              **option("params").dxr,
+              status = {
+                # log = json.encode(_gwNodesMap)
+                serviceCidr = oxr.spec?.serviceCidr
+                podCidr = oxr.spec?.podCidr
+                # For easier access to cluster:
+                if [v.secret?.observed for _, v in _gwNodesMap]?[0]:
+                  clusterSecretName = [v.secret?.observed for _, v in _gwNodesMap]?[0]
+                if _gwNodesMap?[_gwNodeName]?.providerConfigs?.k8s?.observed or \
+                  _gwNodesMap?[_gwNodeName]?.providerConfigs?.helm?.observed:
+                  providerConfigs = { # first controller's provider configs
+                    k8s = _gwNodesMap?[_gwNodeName]?.providerConfigs?.k8s?.observed
+                    helm = _gwNodesMap?[_gwNodeName]?.providerConfigs?.helm?.observed
+                  }
+                controllers = [
+                  {
+                    **{k = v for k, v in obj if v and k in ["privateIp", "publicIp", "deviceNodeName"]}
+                    **{k = str(v?["observed"]) for k, v in obj if v and k in ["secret"]}
+                    **{
+                      k = {
+                        a = str(b?["observed"]) for a, b in v
+                      } for k, v in obj if v and k in ["providerConfigs"]
+                    }
+                  } for n, obj in _gwNodesMap
+                ]
+                agents = [
+                  {
+                    deviceNodeName = n
+                    providerConfigs = {
+                      ssh = obj.sshProviderCfgName or Undefined
+                    }
+                    privateIp = obj.privateIp or Undefined
+                  } for n, obj in _workerNodesMap
+                ]
+              }
+            }
+
+            # Collect all resources into a list for output
+            items = [*_items, dxr]
+
+
+            # Helper to install and setup tailscale
+            _helper_ssh_task_k3s_ctrl = lambda s, pvCfgName, pbScript, ensScript {
+              {
+                apiVersion = "ssh.crossplane.io/v1alpha1"
+                kind = "SSHTask"
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  providerConfigRef.name = pvCfgName
+                  forProvider = {
+                    scripts = {
+                      probeScript.inline = pbScript
+                      ensureScript.inline = ensScript
+                    }
+                    observe = {
+                      refreshPolicy = "Always"
+                      capture = "both"
+                      "map" = [
+                        {
+                          from = "kubeconfig.token"
+                          to = "token"
+                        }
+                        {
+                          from = "kubeconfig.encoded"
+                          to = "kubeconfig"
+                        }
+                        {
+                          from = "network.interface"
+                          to = "interface"
+                        }
+                        {
+                          from = "network.ip"
+                          to = "ip"
+                        }
+                      ]
+                    }
+                    execution = {
+                      sudo = True
+                      shell = "/bin/bash -euo pipefail"
+                      timeoutSeconds = 600
+                      # TODO: change and check setting to 10 to improve speed of convergence
+                      maxAttempts = 2
+                    }
+                    artifactPolicy.capture = "both"    
+                  }
+                }
+              }
+            }
+
+            _helper_cluster_secret = lambda s, PubIp, PrivIp, kubecfgB64, token {
+              k8sv1a2.Object{
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  deletionPolicy = "Delete"      
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "v1",
+                      kind = "Secret",
+                      metadata = {
+                        name = "k3s-bm-{}-{}".format(_oxrProvRegion.lower(), PubIp.replace(".","-")),
+                        namespace = _ns,
+                        labels = {
+                          "skycluster.io/managed-by" = "skycluster",
+                          "skycluster.io/secret-type" = "k8s-connection-data",
+                          "skycluster.io/cluster-name" = oxr.metadata.name,
+                          "skycluster.io/provider-platform" = "baremetal"
+                        },
+                        annotations = {
+                          "skycluster.io/public-ip" = PubIp,
+                          "skycluster.io/private-ip" = PrivIp,
+                        },
+                      },
+                      "type" = "Opaque",
+                      data = {
+                        "kubeconfig" = base64.encode(base64.decode(kubecfgB64).replace(PrivIp, PubIp)) \
+                          if PrivIp and PubIp else kubecfgB64,
+                        "token" = base64.encode(token)
+                      }
+                    },
+                  },
+                  if PubIp and PrivIp and kubecfgB64 and token:
+                    providerConfigRef.name = _k8sProvCfgName
+                }
+              }
+            }
+
+            _helper_cluster_k8s_provider_cfg = lambda s, secretName {
+              k8sv1a2.Object{
+                "metadata" = {
+                  labels = {"skycluster.io/managed-by" = "skycluster"}
+                  annotations = {
+                    **helper._set_resource_name(s)
+                  },
+                },
+                spec = {
+                  references = [{
+                    dependsOn = {
+                      apiVersion = "v1"
+                      kind = "Secret"
+                      name = secretName or "NotReadyYet"
+                      namespace = _ns
+                    }
+                  }]
+                  deletionPolicy = "Delete"
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "kubernetes.crossplane.io/v1alpha1",
+                      kind = "ProviderConfig",
+                      metadata = {
+                        name = "k8s-bm-{}".format(oxr.metadata.name),
+                        namespace = _ns,
+                        labels = {
+                          "skycluster.io/managed-by" = "skycluster"
+                          "skycluster.io/config-type" = "k8s-connection-data"
+                          "skycluster.io/cluster-name" = oxr.metadata.name
+                        },
+                      },
+                      spec = {
+                        credentials = {
+                          source = "Secret"
+                          secretRef = {
+                            name = secretName
+                            namespace = _ns,
+                            key = "kubeconfig"
+                          }
+                        }
+                      }
+                    },
+                  },
+                  providerConfigRef.name = _k8sProvCfgName
+                }
+              }
+            }
+
+            _helper_cluster_helm_provider_cfg = lambda s, secretName {
+              k8sv1a2.Object{
+                "metadata" = {
+                  labels = {"skycluster.io/managed-by" = "skycluster"}
+                  annotations = {
+                    **helper._set_resource_name(s)
+                  },
+                },
+                spec = {
+                  references = [{
+                    dependsOn = {
+                      apiVersion = "v1"
+                      kind = "Secret"
+                      name = secretName or "NotReadyYet"
+                      namespace = _ns
+                    }
+                  }]
+                  deletionPolicy = "Delete"
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "helm.crossplane.io/v1beta1",
+                      kind = "ProviderConfig",
+                      metadata = {
+                        name = "k8s-bm-{}".format(oxr.metadata.name),
+                        namespace = _ns,
+                        labels = {
+                          "skycluster.io/managed-by" = "skycluster"
+                          "skycluster.io/config-type" = "helm-connection-data"
+                          "skycluster.io/cluster-name" = oxr.metadata.name
+                        },
+                      },
+                      spec = {
+                        credentials = {
+                          source = "Secret"
+                          secretRef = {
+                            name = secretName
+                            namespace = _ns,
+                            key = "kubeconfig"
+                          }
+                        }
+                      }
+                    },
+                  },
+                  providerConfigRef.name = _k8sProvCfgName
+                }
+              }
+            }
+
+            _helper_ssh_task_k3s_agent = lambda s, pvCfgName, pbScript, ensScript {
+              {
+                apiVersion = "ssh.crossplane.io/v1alpha1"
+                kind = "SSHTask"
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  providerConfigRef.name = pvCfgName
+                  forProvider = {
+                    scripts = {
+                      probeScript.inline = pbScript
+                      ensureScript.inline = ensScript
+                    }
+                    observe = {
+                      refreshPolicy = "Always"
+                      capture = "both"
+                      "map" = []
+                    }
+                    execution = {
+                      sudo = True
+                      shell = "/bin/bash -euo pipefail"
+                      timeoutSeconds = 600
+                      # TODO: change and check setting to 10 to improve speed of convergence
+                      maxAttempts = 2
+                    }
+                    artifactPolicy.capture = "both"    
+                  }
+                }
+              }
+            }
+    - step: crossplane-contrib-function-auto-ready
+      functionRef:
+        name: function-auto-ready

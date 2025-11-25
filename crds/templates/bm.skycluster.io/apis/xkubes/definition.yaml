@@ -1,9 +1,9 @@
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xkubes.skycluster.io
+  name: xkubes.bm.skycluster.io
 spec:
-  group: skycluster.io
+  group: bm.skycluster.io
   names:
     categories:
     - crossplane
@@ -23,70 +23,15 @@ spec:
                 type: string
               controlPlane:
                 properties:
-                  autoScaling:
-                    properties:
-                      enabled:
-                        type: boolean
-                      maxSize:
-                        type: number
-                      minSize:
-                        type: number
-                    type: object
                   deviceNodeName:
                     type: string
-                  highAvailability:
-                    type: boolean
-                  instanceType:
-                    type: string
                 type: object
-              nodeCidr:
-                type: string
-              nodeGroups:
-                items:
-                  properties:
-                    autoScaling:
-                      properties:
-                        enabled:
-                          type: boolean
-                        maxSize:
-                          type: number
-                        minSize:
-                          type: number
-                      type: object
-                    instanceType:
-                      type: string
-                    instanceTypes:
-                      items:
-                        type: string
-                      type: array
-                    nodeCount:
-                      type: number
-                    publicAccess:
-                      type: boolean
-                    type:
-                      type: string
-                  type: object
-                type: array
               nodes:
                 items:
                   type: string
                 type: array
               podCidr:
-                properties:
-                  cidr:
-                    type: string
-                  private:
-                    type: string
-                  public:
-                    type: string
-                type: object
-              principal:
-                properties:
-                  id:
-                    type: string
-                  type:
-                    type: string
-                type: object
+                type: string
               providerRef:
                 properties:
                   platform:
@@ -96,8 +41,6 @@ spec:
                   zones:
                     properties:
                       primary:
-                        type: string
-                      secondary:
                         type: string
                     type: object
                 type: object
@@ -110,24 +53,40 @@ spec:
               agents:
                 items:
                   properties:
+                    deviceNodeName:
+                      type: string
                     privateIp:
                       type: string
-                    publicAccess:
-                      type: boolean
-                    publicIp:
-                      type: string
+                    providerConfigs:
+                      properties:
+                        ssh:
+                          type: string
+                      type: object
                   type: object
                 type: array
-              clusterName:
-                type: string
               clusterSecretName:
                 type: string
               controllers:
                 items:
                   properties:
+                    deviceNodeName:
+                      type: string
                     privateIp:
                       type: string
+                    providerConfigs:
+                      properties:
+                        helm:
+                          type: string
+                        k8s:
+                          type: string
+                        ssh:
+                          type: string
+                      type: object
                     publicIp:
+                      type: string
+                    secret:
+                      type: string
+                    ssh:
                       type: string
                   type: object
                 type: array

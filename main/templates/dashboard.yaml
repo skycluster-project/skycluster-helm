@@ -1,4 +1,4 @@
-{{ if .Values.install }}
+{{ if or .Values.install }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,7 +17,7 @@ spec:
       serviceAccountName: skycluster-sva
       containers:
       - name: skycluster-dashboard
-        image: etesami/skycluster-dashboard:latest
+        image: etesami/skycluster-dashboard:v0.0.1
         ports:
         - containerPort: 8090
 ---

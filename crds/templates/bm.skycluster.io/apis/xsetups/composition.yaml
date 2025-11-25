@@ -1,0 +1,447 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xsetups.bm.skycluster.io
+spec:
+  compositeTypeRef:
+    apiVersion: bm.skycluster.io/v1alpha1
+    kind: XSetup
+  mode: Pipeline
+  pipeline:
+    - step: pull-extra-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            - kind: XSetup
+              into: SkySetups
+              apiVersion: skycluster.io/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+            - kind: ConfigMap
+              into: ConfigMaps
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: Value
+                    value: baremetal
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
+            - kind: ConfigMap
+              into: Scripts
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/managed-by
+                    type: Value
+                    value: skycluster
+                  - key: skycluster.io/script-type
+                    type: Value
+                    value: bm-gw-setup
+    - step: resources
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: basic
+        spec:
+          dependencies: |
+            helper = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+            provider-kubernetes = { git = "https://github.com/skycluster-project/kcl-modules",version = "0.0.1" }
+          source: |-
+            import yaml
+            import json
+            import base64
+            import helper.v1alpha1.main as helper
+            import provider_kubernetes.v1alpha2 as k8sv1a2
+
+            oxr = option("params").oxr # observed composite resource
+            ocds = option("params")?.ocds # observed composed resources
+            extra = option("params")?.extraResources
+            # _dxr = option("params").dxr # desired composite resource
+            # dcds = option("params").dcds # desired composed resources
+
+            ctx = option("params")?.ctx
+            assert ctx is not Undefined, "Context must be provided in the params"
+
+            _extraRes = ctx["apiextensions.crossplane.io/extra-resources"]
+            assert _extraRes is not Undefined, "Extra resources must be provided in the context"
+
+            _cms = _extraRes["ConfigMaps"][0]
+            _skySetup = _extraRes["SkySetups"][0]
+            _k8sProvCfgName = _skySetup.status?.providerConfig?.kubernetes?.name or Undefined
+            _caCertificateB64 = _skySetup.status?.ca.certificate or Undefined
+            assert _k8sProvCfgName and _caCertificateB64, "Kubernetes provider config name and CA certificate must be specified in the SkySetup status"
+            _loginUrl = _skySetup.status?.headscale?.loginUrl 
+            assert _loginUrl, "Headscale login URL must be specified in the SkySetup status"
+            _hsToken = _skySetup.status?.headscale?.token
+            assert _hsToken, "Headscale token must be specified in the SkySetup status"
+
+            # Gateway script for setting up tailscale and overlay network
+            _gwScript = _extraRes["Scripts"][0]
+
+            _tsInstallProbSc = _gwScript?.data?["tailscale_installation_prob.sh"] or Undefined  
+            _tsInstallEnsureSc = _gwScript?.data?["tailscale_installation.sh"] or Undefined
+
+            # tailscale installation
+            _envStaticScript = _gwScript?.data?["env_prepare_static_script.sh"] or Undefined
+            _envStaticProbScript = _gwScript?.data?["env_prepare_static_prob_script.sh"] or Undefined
+
+            # tailscale run script, needs variables replaced
+            _tsRunScript = _gwScript?.data?["tailscale_run_script.sh"] or Undefined
+            _tsRunProbScript = _gwScript?.data?["tailscale_run_prob_script.sh"] or Undefined
+
+            _scriptGate = all_true([
+              _tsRunScript, _tsRunProbScript,
+              _envStaticScript, _envStaticProbScript,
+              _tsInstallEnsureSc, _tsInstallProbSc,
+            ])
+            assert _scriptGate, "All gateway scripts must be provided in the context"
+
+            _ns = _skySetup.spec.namespace or "skycluster-system"
+
+            _oxrProvRegion = oxr.spec.providerRef.region
+            _oxrProvZone = oxr.spec.providerRef.zones?.primary
+            _oxrProvPlatform = oxr.spec.providerRef.platform
+            _oxrAppId = oxr.spec.applicationId or Undefined
+
+            assert _oxrProvRegion and _oxrProvZone and _oxrProvPlatform, "Provider region, primary zone, platform must be specified"
+
+            assert oxr.spec?.gatewayDeviceName, "Gateway device name must be specified"
+
+            _gatewayNodeStr = _cms.data?["gateway"] or Undefined
+            _workerNodesStr = _cms.data?["worker"] or Undefined
+
+            _gwNodes = yaml.decode(_gatewayNodeStr) if _gatewayNodeStr else Undefined
+            _workerNodes = yaml.decode(_workerNodesStr) if _workerNodesStr else []
+
+            #
+            # Only supporting one gateway node for now
+            #
+            _gwNodeName = oxr.spec?.gatewayDeviceName
+            assert _gwNodeName, "Gateway device name must be specified"
+            assert _gwNodeName in _gwNodes, "Gateway device name '{}' not found in the configmap".format(_gwNodeName)
+
+            _workerNodeNames = oxr.spec?.workerDeviceNames or []
+            assert all_true([n in _workerNodesStr for n in _workerNodeNames]), \
+              "Some worker device names not found in the configmap"
+
+            # Retrieve secret containing the private key for gateway and workers
+            _gwPrivateKeySecretName = _gwNodes?[_gwNodeName]?.auth?.privateKeySecretRef?.name
+            _gwPrivateKeySecretKey = _gwNodes?[_gwNodeName]?.auth?.privateKeySecretRef?.key
+
+            _gwSecrets = extra?["bmPrivateKeySecrets"]
+            _gwSecretData = [_sec.Resource.data for _sec in _gwSecrets \
+              if _sec.Resource.metadata?.name == _gwPrivateKeySecretName] \
+                if _gwSecrets and _gwPrivateKeySecretName else []
+
+            _gwPrivateKeyB64 = _gwSecretData?[0]?[_gwPrivateKeySecretKey] or Undefined
+            # Decrypted private key
+            _defaultPrivateKey = base64.decode(_gwPrivateKeyB64) if _gwPrivateKeyB64 else Undefined
+
+            #
+            # Fetch node spec and create a map with additional fields
+            #
+            _gwNodesMap = {
+              n = {
+                **_gwNodes[n]
+                sshProviderCfgName = ocds?["ssh-pcfg-gw-{}".format(n)]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                sshSecretName = ocds?["sec-ssh-gw-{}".format(n)]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                sshGate = all_true([_gwNodes[n]?.publicIp, _defaultPrivateKey, _k8sProvCfgName])
+                tailscaleGate = all_true([
+                  helper._ready(ocds?["ssh-gw-overlay-{}".format(n)]),
+                  helper._ready(ocds?["ssh-gw-env-{}".format(n)])
+                ])
+              } for n in [_gwNodeName] if _gwNodes and n in _gwNodes
+            }
+
+            #
+            # Worker nodes Map
+            #
+            _workerNodesMap: {str:any} = {
+              n = {
+                **_workerNodes[n],
+                sshProviderCfgName = ocds?["ssh-pcfg-{}".format(n)]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                sshSecretName = ocds?["sec-ssh-{}".format(n)]?.Resource?.status?.atProvider?.manifest?.metadata?.name
+                sshGate = all_true([_workerNodes[n]?.privateIp, _defaultPrivateKey, _k8sProvCfgName])
+              } for n in _workerNodeNames if _workerNodes and n in _workerNodes
+            }
+
+
+            _subnetCidr = _gwNodesMap?[_gwNodeName]?.privateIp
+            _subnetCidrOctets = _subnetCidr.split(".")
+            _subnetCidrFirst = _subnetCidrOctets[0]
+            _subnetCidrSecond = _subnetCidrOctets[1]
+            _subnetCidrThird = _subnetCidrOctets[2]
+            _subnetCidr = "{}.{}.{}.0/24".format(_subnetCidrFirst, _subnetCidrSecond, _subnetCidrThird)
+
+
+
+            # Start assembling resources
+            _items = []
+
+            #
+            # For [gateway] node, we create a secret and provider config
+            # By default, since there is only one gateway node name, one will be created
+            #
+            _items += [
+              _helper_secret_remote("sec-ssh-gw-{}".format(n), spec.publicIp, spec.auth.username, _defaultPrivateKey) \
+                for n, spec in _gwNodesMap if spec.sshGate or ocds?["sec-ssh-gw-{}".format(n)]
+            ]
+
+            _items += [
+              _helper_provider_cfg("ssh-pcfg-gw-{}".format(n), spec.publicIp, spec.sshSecretName) \
+                for n, spec in _gwNodesMap if spec.sshSecretName or ocds?["ssh-pcfg-gw-{}".format(n)]
+            ]
+
+            # 
+            # Create secrets and provider configs for [worker] nodes as well
+            #
+            _items += [
+              _helper_secret_remote("sec-ssh-{}".format(n), spec.privateIp, spec.auth.username, _defaultPrivateKey)
+              for n, spec in _workerNodesMap \
+                if spec.sshGate or ocds?["sec-ssh-{}".format(n)]
+            ]
+
+            # Create SSH provider configs for worker nodes
+            _items += [
+              _helper_provider_cfg("ssh-pcfg-{}".format(n), spec.privateIp, spec.sshSecretName)
+              for n, spec in _workerNodesMap \
+                if spec.sshGate or ocds?["ssh-pcfg-{}".format(n)]
+            ]
+
+            #  
+            # Tailscale installation
+            # It uses SSH provider config created above
+            #
+            _items += [
+              _helper_ssh_task("ssh-gw-overlay-{}".format(n), spec.sshProviderCfgName, _tsInstallProbSc, _tsInstallEnsureSc) \
+                for n, spec in _gwNodesMap \
+                  if (_scriptGate and spec.sshProviderCfgName) or ocds?["ssh-gw-overlay-{}".format(n)]
+            ]
+
+            #
+            # Create some static environment setup such as creating the CA certificates
+            # These files are static and once created, normally they do not need to be re-created
+            #
+            _envStaticScript = _envStaticScript.replace("__SUBNETCIDR__", _subnetCidr)\
+              .replace("__CA_CERTIFICATE_ENCODED__", _caCertificateB64)
+            _items += [
+              _helper_ssh_task("ssh-gw-env-{}".format(n), spec.sshProviderCfgName, _envStaticProbScript, _envStaticScript) \
+                for n, spec in _gwNodesMap \
+                  if (_scriptGate and spec.sshProviderCfgName) or ocds?["ssh-gw-env-{}".format(n)]
+            ]
+
+            #
+            # Once ready a script runs the tailscale to join the overlay network
+            #
+            _tsRunScript = _tsRunScript.replace("__SUBNETCIDR__", _subnetCidr)\
+              .replace("__OVERLAY_LOGIN_URL__", _loginUrl)\
+              .replace("__OVERLAY_TOKEN__", _hsToken)\
+              .replace("__OVERLAY_HOSTNAME__", oxr.metadata?.name)
+
+            # If tailscale installation is done, then we can run the environment setup
+            _items += [
+              _helper_ssh_task("ssh-gw-run-{}".format(n), spec.sshProviderCfgName, _tsRunProbScript, _tsRunScript) \
+                for n, spec in _gwNodesMap \
+                  if (_scriptGate and spec.sshProviderCfgName and spec.tailscaleGate) or ocds?["ssh-gw-run-{}".format(n)]
+            ]
+
+
+
+            extraItems = {
+              apiVersion = "meta.krm.kcl.dev/v1alpha1"
+              kind = "ExtraResources"
+              requirements = {
+                **{"bmPrivateKeySecrets" = {
+                    apiVersion: "v1",
+                    kind: "Secret",
+                    # we cannot use matchName because the secret is namespaced
+                    # hence we filter by label instead and check the name later
+                    matchLabels = {
+                      "skycluster.io/managed-by" = "skycluster",
+                      "skycluster.io/secret-type" = "onpremise-keypair"
+                    }
+                }}
+              }
+            }
+
+            dxr = {
+              **option("params").dxr,
+              status = {
+                # log = json.encode(_gwNodesMap)
+                subnetCidr = _subnetCidr,
+                gateway = {
+                  publicIp = _gwNodesMap?[_gwNodeName]?.publicIp,
+                  privateIp = _gwNodesMap?[_gwNodeName]?.privateIp,
+                  username = _gwNodesMap?[_gwNodeName]?.auth?.username,
+                }
+                auth = {
+                  secretName = _gwPrivateKeySecretName or Undefined
+                  # privateKey = _defaultPrivateKey or Undefined
+                } if _defaultPrivateKey else Undefined
+                deviceNodes = [{
+                    deviceName = n
+                    publicIp = spec.publicIp or Undefined
+                    privateIp = spec.privateIp or Undefined
+                    username = spec.auth?.username or Undefined
+                    sshProviderConfigName = spec.sshProviderCfgName or Undefined
+                    sshSecretName = spec.sshSecretName or Undefined
+                    type = "gateway"
+                  } for n, spec in _gwNodesMap] + [{
+                    deviceName = n
+                    privateIp = spec.privateIp or Undefined
+                    username = spec.auth?.username or Undefined
+                    sshProviderConfigName = spec.sshProviderCfgName or Undefined
+                    sshSecretName = spec.sshSecretName or Undefined
+                    type = "worker"
+                  } for n, spec in _workerNodesMap
+                ]
+              }
+            }
+
+            # Collect all resources into a list for output
+            items = [*_items, dxr, extraItems]
+
+
+            # 
+            # Create SSH secret for a DeviceNode
+            # 
+            _helper_secret_remote = lambda s, ip, user, pvKey {
+              k8sv1a2.Object{
+                "metadata": {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  forProvider = {
+                    manifest = {
+                      apiVersion: "v1",
+                      kind: "Secret",
+                      metadata: {
+                        name: "ssh-bm-{}-{}".format(_oxrProvRegion.lower(), ip),
+                        namespace: _ns
+                      },
+                      type = "Opaque",
+                      stringData = {
+                        config = json.encode({
+                          username = user
+                          password = ""
+                          hostIP = ip
+                          hostPort = "22"
+                          privateKey = pvKey
+                    })}},
+                  }
+                  providerConfigRef.name = _k8sProvCfgName
+                }
+              }
+            }
+
+            # 
+            # Create SSH ProviderConfig for a DeviceNode
+            # 
+            _helper_provider_cfg = lambda s, ip, sshSecName {
+              k8sv1a2.Object{
+                "metadata" = {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  references = [{
+                    # TODO: When object is deleted, the providerconfig remains
+                    # Manual deletion of provider config does not remove the finalizer on the secret
+                    # The owner of secret still remains waiting for secret to be removed.
+                    dependsOn = {
+                      apiVersion = "v1"
+                      kind = "Secret"
+                      name = "ssh-bm-{}-{}".format(_oxrProvRegion.lower(), ip),
+                      namespace = _ns
+                    }
+                  }]
+                  deletionPolicy = "Delete"
+                  forProvider = {
+                    manifest = {
+                      apiVersion = "ssh.crossplane.io/v1alpha1",
+                      kind = "ProviderConfig",
+                      metadata = {
+                        name = "ssh-bm-{}-{}".format(_oxrProvRegion.lower(), ip),
+                        namespace = _ns,
+                      },
+                      spec = {
+                        credentials = {
+                          source = "Secret"
+                          secretRef = {
+                            name = sshSecName
+                            namespace = _ns,
+                            key = "config"
+                    }}}},
+                  },
+                  providerConfigRef.name = _k8sProvCfgName
+                }
+              }
+            }
+
+            # Helper to install and setup tailscale
+            _helper_ssh_task = lambda s, pvCfgName, pbScript, ensScript {
+              {
+                apiVersion = "ssh.crossplane.io/v1alpha1"
+                kind = "SSHTask"
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name(s),
+                  },
+                },
+                spec = {
+                  providerConfigRef.name = pvCfgName
+                  forProvider = {
+                    scripts = {
+                      probeScript.inline = pbScript
+                      ensureScript.inline = ensScript
+                    }
+                    observe = {
+                      refreshPolicy = "Always"
+                      capture = "both"
+                      "map" = []
+                    }
+                    execution = {
+                      sudo = True
+                      shell = "/bin/bash -euo pipefail"
+                      timeoutSeconds = 600
+                      # TODO: change and check setting to 10 to improve speed of convergence
+                      maxAttempts = 2
+                    }
+                    artifactPolicy.capture = "both"    
+                  }
+                }
+              }
+            }
+    - step: crossplane-contrib-function-auto-ready
+      functionRef:
+        name: function-auto-ready

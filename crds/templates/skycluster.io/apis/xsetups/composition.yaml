@@ -123,57 +123,14 @@ spec:
             _apiServer = oxr.spec?.apiServer or Undefined
             assert _apiServer is not Undefined, "Broker public IP and port must be provided"
 
-            _default_labels = {
-              **oxr.metadata?.labels,
-              "skycluster.io/managed-by" = "skycluster"
-            }
-
-            _default_annotations = {
-              **oxr.metadata?.annotations,
-            }
-
             # Helm Provider Config
             _items = [
-              helmv1beta1.ProviderConfig{
-                metadata = {
-                  labels = _default_labels | {
-                    "skycluster.io/config-type" = "helm-connection-data"
-                    "skycluster.io/cluster-name" = "skycluster-management"
-                  }
-                  annotations = {
-                      **_default_annotations,
-                      **helper._set_resource_name("helmConfig"),
-                      "krm.kcl.dev/ready": "True"
-                  }
-                }
-                spec = {
-                  credentials = {
-                    source: "InjectedIdentity"
-                  }
-                }
-              }
+              _helper_provider_cfg_helm()
             ] if _helmProv else []
 
             # Kubernetes Provider Config
             _items += [
-              k8sv1alpha1.ProviderConfig{
-                metadata = {
-                  labels = _default_labels | {
-                    "skycluster.io/config-type" = "k8s-connection-data"
-                    "skycluster.io/cluster-name" = "skycluster-management"
-                  }
-                  annotations = {
-                      **_default_annotations,
-                      **helper._set_resource_name("k8sConfig"),
-                      "krm.kcl.dev/ready": "True"
-                  }
-                }
-                spec = {
-                  credentials = {
-                    source: "InjectedIdentity"
-                  }
-                }
-              }
+              _helper_provider_cfg_k8s()
             ] if _k8sProv else []
 
 
@@ -182,50 +139,13 @@ spec:
 
             # submariner presetup
             _items += [
-              helmv1beta1.Release{
-                metadata = {
-                  labels = {
-                    **_default_labels,
-                    "skycluster.io/managed-by": "skycluster",
-                  },
-                  annotations = {
-                    **_default_annotations,
-                    **helper._set_resource_name("submarinerBrokerRelease")
-                  }
-                }
-                spec = {
-                  forProvider = {
-                    chart = {
-                      name = "submariner-k8s-broker"
-                      repository = "https://submariner-io.github.io/submariner-charts/charts"
-                      version = "0.20.1"
-                    }
-                    namespace = _ns
-                    skipCreateNamespace = True
-                  }
-                  providerConfigRef = {
-                    name = _helmProvCfgName
-                  }
-                }
-              }
+              _helper_submariner_broker()
             ] if (oxr?.spec?.submariner?.enabled and _helmProvCfgName) or ocds?["submarinerBrokerRelease"] else []
 
             # submariner overlay setup
             _items += [
-              {
-                apiVersion = "skycluster.io/v1alpha1"
-                kind = "XOverlay"
-                metadata = {
-                  labels = _default_labels
-                  annotations = {
-                    **_default_annotations
-                    **helper._set_resource_name("xoverlay"),
-                  }
-                }
-                spec = {}
-              }
+              _helper_overlay()
             ] if oxr?.spec?.submariner?.enabled and helper._ready(ocds?["submarinerBrokerRelease"]) else []
-
 
 
             _apiServerForHeadscale = _apiServer.split(":")[0]
@@ -233,77 +153,202 @@ spec:
 
             # Pod Generating Headscale Certificate
             _items += [
+              _helper_headscale_generate_ca()
+            ] if (_k8sProvCfgName and _apiServerForHeadscale) or ocds?["headscaleCertGenPod"] else []
+
+
+            # # Headscale-server Deployment
+            _headscaleSecretName = "headscale-connection-secret"
+            _items += [ 
+              _helper_headscale_server(),
+              _helper_headscale_service(),
+            ] if helper._ready(ocds?["headscaleCertGenPod"]) or ocds?["headscaleServerDeployment"] else []
+
+            #
+            # Istio pre setup: generate root cacerts,
+            # it also generates ca cert for the local management cluster and
+            # store them in a secret with name skycluster-management-cacerts
+            # We fetch the generated secret for istio root-ca using extraResource
+            #
+            _items += [ _helper_root_ca(_kubeconfig_B64) ] if _k8sProvCfgName or ocds?["caCerts"] else []
+
+            # # We need to observe the secret for headscale connection
+            _items += [_helper_headscale_token()] if helper._ready(ocds?["headscaleServerDeployment"]) or ocds?["headscaleToken"] else []
+
+
+            _hsTokenEnc = ocds?["headscaleToken"]?.Resource?.status?.atProvider?.manifest?.data?["preauth.json"]
+            _hsTokenDec = base64.decode(_hsTokenEnc) if _hsTokenEnc else Undefined
+            _hsToken = json.decode(_hsTokenDec) if _hsTokenDec else Undefined
+
+            dxr = [{
+              **option("params").dxr,
+              status = {
+                apiServer = oxr?.spec?.apiServer or Undefined,
+                namespace = oxr?.spec?.namespace or "default",
+                if _helmProvCfgName or _k8sProvCfgName:
+                  providerConfig = {
+                    helm = {
+                      name = _helmProvCfgName
+                    } if _helmProvCfgName else Undefined,
+                    kubernetes = {
+                      name = _k8sProvCfgName
+                    } if _k8sProvCfgName else Undefined
+                  }
+                if ocds?["xoverlay"]?.Resource?.status?.connectionSecretName:
+                  submariner = {
+                    connectionSecretName = ocds?["xoverlay"]?.Resource?.status?.connectionSecretName or Undefined
+                  }
+                if _hsToken?["key"]:
+                  headscale = {
+                    connectionSecretName = _headscaleSecretName,
+                    loginUrl = "https://{}:8080".format(_apiServerForHeadscale) if _apiServerForHeadscale else Undefined,
+                    token = _hsToken?["key"] 
+                  }
+                if extra?.rootCASecret:
+                  istio = {
+                    rootCASecretName = extra?.rootCASecret?[0]?.Resource?.metadata?.name
+                  }
+                keypair = {
+                  secretName = _keypair.metadata?.name or Undefined,
+                  secretNamespace = _keypair.metadata?.namespace or "skycluster-system",
+                  publicKey = json.decode(base64.decode(_keypair.data?.config))?.publicKey or Undefined
+                }
+                ca = {
+                  secretName = _caSecret.metadata?.name,
+                  secretNamespace = _caSecret.metadata?.namespace,
+                  certificate = _ca
+                }
+              }
+            }] 
+
+            extraItems = [{
+              apiVersion = "meta.krm.kcl.dev/v1alpha1"
+              kind = "ExtraResources"
+              requirements = {
+                rootCASecret = {
+                    apiVersion: "v1",
+                    kind: "Secret",
+                    matchLabels: {
+                      "skycluster.io/secret-type": "istio-root-ca"
+                    }
+                }
+              }
+            }]
+
+            items = _items + dxr + extraItems
+
+
+            _helper_root_ca = lambda kc {
               k8sv1alpha2.Object{
                 metadata = {
-                  labels = _default_labels
-                  annotations = {
-                    **_default_annotations,
-                    **helper._set_resource_name("headscaleCertGenPod")
-                  }
+                  labels = {"skycluster.io/job-type": "istio-ca-certs"}
+                  annotations = helper._set_resource_name("caCerts")
                 }
                 spec =  {
                   forProvider.manifest = {
-                    apiVersion = "v1"
-                    kind = "Pod"
+                    apiVersion = "batch/v1"
+                    kind = "Job"
                     metadata = { 
-                      name = "headscale-cert-gen",
-                      namespace = _ns if _ns else "skycluster-system",
-                      labels = {
-                        **_default_labels,
-                        "skycluster.io/pod-type": "headscale-cert-gen"
-                      },
-                      annotations = _default_annotations
+                      name = "istio-root-ca-certs-generator",
+                      namespace = "skycluster-system",
+                      labels = {"skycluster.io/job-type": "istio-ca-certs"},
                     }
                     spec = {
-                      restartPolicy = "Never"
-                      containers = [{
-                        name = "headscale-cert-gen"
-                        image = "etesami/ca-signer:latest"
-                        imagePullPolicy = "Always"
-                        env = [
-                          {
-                            name = "CA_SECRET_NAME"
-                            value = "skycluster-self-ca"
-                          },
-                          {
-                            name = "OUTPUT_SECRET_NAME"
-                            value = "headscale-cert"
-                          },
-                          {
-                            name = "NAMESPACE"
-                            value = _ns if _ns else "skycluster-system"
-                          },
-                          {
-                            name = "CERT_COMMON_NAME"
-                            value = "skycluster.local"
-                          },
-                          {
-                            name = "CERT_SANS"
-                            value = "DNS:skycluster.local,IP:{}".format(_apiServerForHeadscale)
-                          }
-                        ]
-                      }]
-                      serviceAccountName = "skycluster-sva"
-                      restartPolicy = "Never"
+                      backoffLimit = 0
+                      template = {
+                        metadata.labels = {
+                          "skycluster.io/job-type": "istio-ca-certs"
+                        }
+                        spec = {
+                          serviceAccountName: "skycluster-sva"
+                          restartPolicy = "Never"
+                          volumes = [{
+                              name = "work"
+                              emptyDir = {}
+                            }, {
+                              name = "script"
+                              configMap = {
+                                name = "script-kubemesh-setup"
+                                defaultMode = 0755
+                              }
+                            }
+                          ]
+                          containers = [{
+                              name = "runner"
+                              image = "etesami/kubectl:latest"
+                              imagePullPolicy = "IfNotPresent"
+                              command = ["/bin/bash","-lc","/script/istio-root-ca.sh"]
+                              env = [{
+                                  name = "NAMESPACE"
+                                  value = "skycluster-system"
+                                }, {
+                                  name = "ROOT_SECRET_NAME"
+                                  value = "istio-root-ca"
+                                }, {
+                                  name = "KCFG_SELECTOR"
+                                  value = "skycluster.io/managed-by=skycluster,skycluster.io/secret-type=k8s-connection-data"
+                                }, {
+                                  name = "KUBECONFIG_B64"
+                                  value = kc
+                                }, {
+                                  name = "SCRIPTS_DIR"
+                                  value = "/script"
+                                }
+                              ]
+                              volumeMounts = [{
+                                  name = "work"
+                                  mountPath = "/work"
+                                }, {
+                                  name = "script"
+                                  mountPath = "/script"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
                     }
+                  }
+                  readiness = {
+                    policy = "DeriveFromCelQuery"
+                    celQuery = "object.status.succeeded == 1"
                   }
                   providerConfigRef = {
                     name = _k8sProvCfgName
                   }
                 }
               }
-            ] if (_k8sProvCfgName and _apiServerForHeadscale) or ocds?["headscaleCertGenPod"] else []
+            }
 
+            _helper_headscale_token = lambda {
+              k8sv1alpha2.Object{
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name("headscaleToken")
+                  }
+                }
+                spec = {
+                  forProvider.manifest = {
+                    apiVersion = "v1"
+                    kind = "Secret"
+                    metadata = { 
+                      name = _headscaleSecretName,
+                      namespace = "skycluster-system",
+                    }
+                  }
+                  managementPolicies = ["Observe"]
+                  providerConfigRef = {
+                    name = _k8sProvCfgName
+                  }
+                }
+              }
+            }
 
-            # Headscale-server Deployment
-            _headscaleSecretName = "headscale-connection-secret"
-            _items += [
+            _helper_headscale_server = lambda {
               # Init and main headscale-server containers
               k8sv1alpha2.Object{
                 metadata = {
-                  labels = _default_labels
                   annotations = {
-                    **_default_annotations,
                     **helper._set_resource_name("headscaleServerDeployment")
                   }
                 }
@@ -315,10 +360,8 @@ spec:
                       name = "headscale-server",
                       namespace = _ns if _ns else "skycluster-system",
                       labels = {
-                        **_default_labels,
                         "skycluster.io/deploy-type": "headscale-server"
                       },
-                      annotations = _default_annotations
                     }
                     spec = {
                       selector.matchLabels = {"app": "headscale-server"}
@@ -421,13 +464,13 @@ spec:
                   }
                 }
               }
-              
+            }
+
+            _helper_headscale_service = lambda {
               # Service for headscale-server
               k8sv1alpha2.Object{
                 metadata = {
-                  labels = _default_labels
                   annotations = {
-                    **_default_annotations,
                     **helper._set_resource_name("headscaleServerService")
                   }
                 }
@@ -439,10 +482,8 @@ spec:
                       name = "headscale-server",
                       namespace = _ns if _ns else "skycluster-system",
                       labels = {
-                        **_default_labels,
                         "skycluster.io/service-type": "headscale-server"
                       },
-                      annotations = _default_annotations
                     }
                     spec = {
                       type = "NodePort"
@@ -459,176 +500,157 @@ spec:
                   }
                 }
               }
+            }
 
-            ] if helper._ready(ocds?["headscaleCertGenPod"]) or ocds?["headscaleServerDeployment"] else []
-
-
-            #
-            # Istio pre setup: generate root cacerts,
-            # it also generates ca cert for the local management cluster and
-            # store them in a secret with name skycluster-management-cacerts
-            # We fetch the generated secret for istio root-ca using extraResource
-            #
-            _items += [ _helper_root_ca(_kubeconfig_B64) ] if _k8sProvCfgName or ocds?["caCerts"] else []
-
-
-
-            # We need to observe the secret for headscale connection
-            _items += [
+            _helper_headscale_generate_ca = lambda {
               k8sv1alpha2.Object{
                 metadata = {
                   annotations = {
-                    **helper._set_resource_name("headscaleToken")
+                    **helper._set_resource_name("headscaleCertGenPod")
                   }
-                }
-                spec = {
-                  forProvider.manifest = {
-                    apiVersion = "v1"
-                    kind = "Secret"
-                    metadata = { 
-                      name = _headscaleSecretName,
-                      namespace = "skycluster-system",
-                    }
-                  }
-                  managementPolicies = ["Observe"]
-                  providerConfigRef = {
-                    name = _k8sProvCfgName
-                  }
-                }
-              }
-            ] if helper._ready(ocds?["headscaleServerDeployment"]) or ocds?["headscaleToken"] else []
-            _hsTokenEnc = ocds?["headscaleToken"]?.Resource?.status?.atProvider?.manifest?.data?["preauth.json"]
-            _hsTokenDec = base64.decode(_hsTokenEnc) if _hsTokenEnc else Undefined
-            _hsToken = json.decode(_hsTokenDec) if _hsTokenDec else Undefined
-
-            dxr = [{
-              **option("params").dxr,
-              status.apiServer = oxr?.spec?.apiServer or Undefined,
-              status.namespace = oxr?.spec?.namespace or "default",
-              status.providerConfig = {
-                helm = {
-                  name = _helmProvCfgName
-                } if _helmProvCfgName else Undefined,
-                kubernetes = {
-                  name = _k8sProvCfgName
-                } if _k8sProvCfgName else Undefined
-              } if _helmProvCfgName or _k8sProvCfgName else Undefined
-              status.submariner.connectionSecretName = ocds?["xoverlay"]?.Resource?.status?.connectionSecretName or Undefined
-              status.headscale = {
-                connectionSecretName = _headscaleSecretName,
-                loginUrl = "https://{}:8080".format(_apiServerForHeadscale) if _apiServerForHeadscale else Undefined,
-                token = _hsToken?["key"] 
-              }
-              if extra?.rootCASecret:
-                status.istio = {
-                  rootCASecretName = extra?.rootCASecret?[0]?.Resource?.metadata?.name
-                }
-              status.keypair = {
-                secretName = _keypair.metadata?.name or Undefined,
-                secretNamespace = _keypair.metadata?.namespace or "skycluster-system",
-                publicKey = json.decode(base64.decode(_keypair.data?.config))?.publicKey or Undefined
-              }
-              status.ca = {
-                secretName = _caSecret.metadata?.name,
-                secretNamespace = _caSecret.metadata?.namespace,
-                certificate = _ca
-              }
-              # status.log = json.encode({
-              #   extraRes = extra
-              # })
-            }] 
-
-            extraItems = [{
-              apiVersion = "meta.krm.kcl.dev/v1alpha1"
-              kind = "ExtraResources"
-              requirements = {
-                rootCASecret = {
-                    apiVersion: "v1",
-                    kind: "Secret",
-                    matchLabels: {
-                      "skycluster.io/secret-type": "istio-root-ca"
-                    }
-                }
-              }
-            }]
-
-            items = _items + dxr + extraItems
-
-
-            _helper_root_ca = lambda kc {
-              k8sv1alpha2.Object{
-                metadata = {
-                  labels = _default_labels | {"skycluster.io/job-type": "istio-ca-certs"}
-                  annotations = _default_annotations | helper._set_resource_name("caCerts")
                 }
                 spec =  {
                   forProvider.manifest = {
                     apiVersion = "batch/v1"
                     kind = "Job"
                     metadata = { 
-                      name = "istio-root-ca-certs-generator",
+                      name = "headscale-cert-gen",
                       namespace = "skycluster-system",
-                      labels = _default_labels | {"skycluster.io/job-type": "istio-ca-certs"},
-                      annotations = _default_annotations
+                      labels = {
+                        "skycluster.io/job-type": "istio-ca-certs" 
+                      },
                     }
                     spec = {
                       backoffLimit = 0
+                      parallelism = 1        
+                      completions = 1
+
                       template = {
-                        metadata.labels = _default_labels | {
-                          "skycluster.io/job-type": "istio-ca-certs"
+                        metadata.labels =  {
+                          "skycluster.io/job-type": "headscale-cert-gen"
                         }
                         spec = {
                           serviceAccountName: "skycluster-sva"
                           restartPolicy = "Never"
-                          volumes = [{
-                              name = "work"
-                              emptyDir = {}
-                            }, {
-                              name = "script"
-                              configMap = {
-                                name = "script-kubemesh-setup"
-                                defaultMode = 0755
-                              }
-                            }
-                          ]
                           containers = [{
-                              name = "runner"
-                              image = "etesami/kubectl:latest"
-                              imagePullPolicy = "IfNotPresent"
-                              command = ["/bin/bash","-lc","/script/istio-root-ca.sh"]
-                              env = [{
-                                  name = "NAMESPACE"
-                                  value = "skycluster-system"
-                                }, {
-                                  name = "ROOT_SECRET_NAME"
-                                  value = "istio-root-ca"
-                                }, {
-                                  name = "KCFG_SELECTOR"
-                                  value = "skycluster.io/managed-by=skycluster,skycluster.io/secret-type=k8s-connection-data"
-                                }, {
-                                  name = "KUBECONFIG_B64"
-                                  value = kc
-                                }, {
-                                  name = "SCRIPTS_DIR"
-                                  value = "/script"
-                                }
-                              ]
-                              volumeMounts = [{
-                                  name = "work"
-                                  mountPath = "/work"
-                                }, {
-                                  name = "script"
-                                  mountPath = "/script"
-                                }
-                              ]
-                            }
-                          ]
+                            name = "headscale-cert-gen"
+                            image = "etesami/ca-signer:latest"
+                            imagePullPolicy = "Always"
+                            env = [
+                              {
+                                name = "CA_SECRET_NAME"
+                                value = "skycluster-self-ca"
+                              },
+                              {
+                                name = "OUTPUT_SECRET_NAME"
+                                value = "headscale-cert"
+                              },
+                              {
+                                name = "NAMESPACE"
+                                value = _ns if _ns else "skycluster-system"
+                              },
+                              {
+                                name = "CERT_COMMON_NAME"
+                                value = "skycluster.local"
+                              },
+                              {
+                                name = "CERT_SANS"
+                                value = "DNS:skycluster.local,IP:{}".format(_apiServerForHeadscale)
+                              }
+                            ]
+                          }]
                         }
                       }
                     }
                   }
                   providerConfigRef = {
                     name = _k8sProvCfgName
+                  }
+                  readiness = {
+                    policy = "DeriveFromCelQuery"
+                    celQuery = "object.status.succeeded == 1"
+                  }
+                }
+              }
+            }
+
+            _helper_overlay = lambda {
+              {
+                apiVersion = "skycluster.io/v1alpha1"
+                kind = "XOverlay"
+                metadata = {
+                  annotations = {
+                    **helper._set_resource_name("xoverlay"),
+                  }
+                }
+                spec = {}
+              }
+            }
+
+            _helper_submariner_broker = lambda {
+              helmv1beta1.Release{
+                metadata = {
+                  labels = {
+                    "skycluster.io/managed-by": "skycluster",
+                  },
+                  annotations = {
+                    **helper._set_resource_name("submarinerBrokerRelease")
+                  }
+                }
+                spec = {
+                  forProvider = {
+                    chart = {
+                      name = "submariner-k8s-broker"
+                      repository = "https://submariner-io.github.io/submariner-charts/charts"
+                      version = "0.20.1"
+                    }
+                    namespace = _ns
+                    skipCreateNamespace = True
+                  }
+                  providerConfigRef = {
+                    name = _helmProvCfgName
+                  }
+                }
+              }
+            }
+
+            _helper_provider_cfg_k8s = lambda {
+              k8sv1alpha1.ProviderConfig{
+                metadata = {
+                  labels = {
+                    "skycluster.io/managed-by": "skycluster",
+                    "skycluster.io/config-type" = "k8s-connection-data"
+                    "skycluster.io/cluster-name" = "skycluster-management"
+                  }
+                  annotations = {
+                      **helper._set_resource_name("k8sConfig"),
+                      "krm.kcl.dev/ready": "True"
+                  }
+                }
+                spec = {
+                  credentials = {
+                    source: "InjectedIdentity"
+                  }
+                }
+              }
+            }
+
+            _helper_provider_cfg_helm = lambda {
+              helmv1beta1.ProviderConfig{
+                metadata = {
+                  labels = {
+                    "skycluster.io/managed-by": "skycluster",
+                    "skycluster.io/config-type" = "helm-connection-data"
+                    "skycluster.io/cluster-name" = "skycluster-management"
+                  }
+                  annotations = {
+                      **helper._set_resource_name("helmConfig"),
+                      "krm.kcl.dev/ready": "True"
+                  }
+                }
+                spec = {
+                  credentials = {
+                    source: "InjectedIdentity"
                   }
                 }
               }

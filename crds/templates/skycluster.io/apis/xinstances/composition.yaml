@@ -127,17 +127,6 @@ spec:
             assert _oxrProvPlatform and _oxrProvRegion and _oxrProvZone and _appId, \
               "Provider platform, region, and primary zone and application ID must be specified in the providerRef"
 
-
-            _default_labels = {
-              **oxr.metadata?.labels,
-              **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
-            }
-
-            _default_annotations = {
-              **oxr.metadata?.annotations,
-              **helper._is_paused_label(oxr.metadata.labels),
-            }
-
             _extractPrivateKey: (any) -> str = lambda data {
               _decstr = base64.decode(data) or Undefined
               _obj = json.decode(_decstr) if _decstr else Undefined
@@ -160,7 +149,7 @@ spec:
               if _abstractFlavor else oxr.spec?.flavor
 
             _ud = oxr.spec?.userData or Undefined
-            _scripts = ["ip-forwarding"]
+            _scripts = ["ip-forwarding", "docker-config"]
 
             if not oxr.spec?.publicIp:
               _scripts += ["routing-gateway"]
@@ -169,31 +158,34 @@ spec:
               # as it may not have the labels to be filtered.
               # So, we handle this in xinstances.<cloud> composition.
 
+            # Construct the cloud-init userData for running docker container
+            if oxr.spec?.dockerSpec:
+              _dockerScript = _dockerScriptHeader + oxr.spec?.dockerSpec + _dockerScriptBody
+              _cloudInitDockerScript = _helper_cloud_init_scripts(_dockerScript)
+              _initScripts = _initScripts + [_cloudInitDockerScript]
+              _scripts = _scripts + ["docker-setup"]
+              
             _defaultUserData: any = yaml.decode(helper._select_init_scripts(_initScripts, _scripts)) or Undefined
             _userData = helper._append_init_scripts([_defaultUserData] + ([yaml.decode(_ud)] if _ud else []))
 
             _defaultPrivateKey = _extractPrivateKey(_defaultKey?.data?["config"])
 
+            _items = []
             #
             # xinstances.aws
             #
-            _items = [
+            _items += [
               {
                 apiVersion = "aws.skycluster.io/v1alpha1"
                 kind = "XInstance"
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels,
-                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
-                  }
-                  annotations = {
-                    **oxr.metadata?.annotations,
-                    **helper._set_resource_name("xinstance")
-                  }
+                  labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  annotations = helper._set_resource_name("xinstance")
                 }
                 spec = {
                   applicationId = _appId
                   flavor = _it
+                  preferSpot = oxr.spec?.preferSpot or False
                   image = _ami
                   publicKey = _publicKey
                   publicIp = oxr.spec?.publicIp or False
@@ -217,23 +209,18 @@ spec:
             #
             # xinstances.gcp
             #
-            _items = [
+            _items += [
               {
                 apiVersion = "gcp.skycluster.io/v1alpha1"
                 kind = "XInstance"
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels,
-                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
-                  }
-                  annotations = {
-                    **oxr.metadata?.annotations,
-                    **helper._set_resource_name("xinstance")
-                  }
+                  labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  annotations = helper._set_resource_name("xinstance")
                 }
                 spec = {
                   applicationId = _appId
                   flavor = _it
+                  preferSpot = oxr.spec?.preferSpot or False
                   image = _ami
                   publicKey = _publicKey
                   publicIp = oxr.spec?.publicIp or False
@@ -257,19 +244,13 @@ spec:
             #
             # xinstances.os
             #
-            _items = [
+            _items += [
               {
                 apiVersion = "os.skycluster.io/v1alpha1"
                 kind = "XInstance"
                 metadata = {
-                  labels = {
-                    **oxr.metadata?.labels,
-                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
-                  }
-                  annotations = {
-                    **oxr.metadata?.annotations,
-                    **helper._set_resource_name("xinstance")
-                  }
+                  labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                  annotations = helper._set_resource_name("xinstance")
                 }
                 spec = {
                   applicationId = _appId
@@ -296,8 +277,8 @@ spec:
             _secretSSHGate = all_true([_privateIp, _defaultPrivateKey, _providerK8SCfgName])
             _items += [k8sv1a2.Object{
               "metadata": {
-                labels = _default_labels
-                annotations = _default_annotations | {
+                labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                annotations = {
                   **helper._set_resource_name("secRemoteSSH"),
                 },
               },
@@ -309,8 +290,7 @@ spec:
                     metadata: {
                       name: "ssh-{}-{}-{}".format(_oxrProvPlatform.lower(), _oxrProvRegion.lower(), _privateIp),
                       namespace: _ns,
-                      labels: _default_labels,
-                      annotations: _default_annotations,
+                      labels: helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
                     },
                     type = "Opaque",
                     stringData = {
@@ -332,8 +312,8 @@ spec:
             _provCfgGate = all_true([_sshSecretName, _providerK8SCfgName])
             _items += [k8sv1a2.Object{
               "metadata" = {
-                labels = _default_labels
-                annotations = _default_annotations | {
+                labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
+                annotations = {
                   **helper._set_resource_name("sshProviderConfig"),
                 },
               },
@@ -357,8 +337,7 @@ spec:
                     metadata = {
                       name = "ssh-{}-{}-{}".format(_oxrProvPlatform.lower(), _oxrProvRegion.lower(), _privateIp),
                       namespace = _ns,
-                      labels = _default_labels,
-                      annotations = _default_annotations,
+                      labels = helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _appId),
                     },
                     spec = {
                       credentials = {
@@ -383,8 +362,9 @@ spec:
 
             dxr = [{
               **option("params").dxr,
-              # status.log = _userData
               status = {
+                # log = "yes" if oxr.spec?.providerRef?.platform == "aws" else "no"
+                providerName = ocds?["xinstance"]?.Resource?.status?.providerName
                 if _privateIp or _publicIp:
                   network = {
                     privateIp = _privateIp
@@ -394,10 +374,81 @@ spec:
                   providerConfig = {
                     kubernetes.name = _sshProviderCfgName
                   }
+                if ocds?["xinstance"]?.Resource?.status?.spotInstance:
+                  spotInstance = True
               }
             }]
 
             items = _items + dxr
+
+
+
+            _dockerScriptHeader = """\
+            #!/bin/bash
+            set -euo pipefail
+
+            """
+
+            _dockerScriptBody = """\
+
+            echo "Waiting for Docker to become ready..." > /root/docker-setup.log
+            while ! docker info >/dev/null 2>&1; do
+              sleep "$SLEEP"
+            done
+            echo "Docker is ready." >> /root/docker-setup.log
+            echo "Pulling image $IMAGE..." >> /root/docker-setup.log
+            docker pull "$IMAGE"
+
+            # Build docker run args
+            PORT_ARGS=""
+            for p in $PORT_MAPPINGS; do
+              PORT_ARGS="$PORT_ARGS -p $p"
+            done
+
+            ENV_ARGS=""
+            for e in $ENVS; do
+              ENV_ARGS="$ENV_ARGS -e $e"
+            done
+
+            echo "Running container $NAME (image: $IMAGE)..." >> /root/docker-setup.log
+            docker run -d $RESTART $PORT_ARGS $ENV_ARGS --name "$NAME" "$IMAGE"
+            echo "Container $NAME started." >> /root/docker-setup.log
+            """
+
+            _dockerScriptBase = """\
+            write_files:
+              - path: /usr/local/bin/run_container.sh
+                owner: root:root
+                permissions: '0755'
+                content: ""
+            runcmd:
+              - /usr/local/bin/run_container.sh
+            """
+
+            _helper_cloud_init_scripts = lambda script {
+              {
+                "metadata" = {
+                  labels = {
+                    "skycluster.io/script-init" = "docker-setup"
+                  }
+                }
+                "data" = {
+                  "cloud-init": _helper_embed_cloud_init_script(_dockerScriptBase, script)
+                }
+              }
+            }
+
+            _helper_embed_cloud_init_script = lambda ymlData, script {
+              yaml.encode({
+                "write_files" = [{
+                  "path" = "/usr/local/bin/run_container.sh",
+                  "owner" = "root:root",
+                  "permissions" = "0755",
+                  "content" = script,
+                }],
+                "runcmd"= [ "/usr/local/bin/run_container.sh" ]
+              })
+            }
 
     - step: function-auto-ready
       functionRef:

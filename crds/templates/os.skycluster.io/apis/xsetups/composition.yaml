@@ -30,6 +30,23 @@ spec:
                   - key: skycluster.io/provider-region
                     type: FromCompositeFieldPath
                     valueFromFieldPath: spec.providerRef.region
+            - kind: ConfigMap
+              into: ProviderSettings
+              apiVersion: v1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 1
+                matchLabels:
+                  - key: skycluster.io/config-type
+                    type: Value
+                    value: provider-profile
+                  - key: skycluster.io/provider-platform
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.platform
+                  - key: skycluster.io/provider-region
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.providerRef.region
             - kind: XSetup
               into: SkySetups
               apiVersion: skycluster.io/v1alpha1
@@ -75,6 +92,9 @@ spec:
             _provCfg = _extraRes["ProviderConfig"][0]
             _skySetup = _extraRes["SkySetups"][0]
 
+            _provSettings = _extraRes["ProviderSettings"]?[0] 
+            assert _provSettings is not Undefined, "Provider settings must be provided in the extra resources"
+
             _ns = _skySetup.spec.namespace or "skycluster-system"
 
             _oxrProvRegion = oxr.spec.providerRef.region
@@ -105,9 +125,9 @@ spec:
             # the value must be a valid JSON string, example:
             # [{"apiVersion":"identity.openstack.crossplane.io/v1alpha1","kind":"ProjectV3","id":"uuid"}]
             _external_resources: (any, str, str) -> any = lambda labels, av, ki {
-              l1 = [v for k, v in labels if labels and "skycluster.io/external-resources" == k.lower() and json.validate(v)][0]
+              l1 = [v for k, v in labels if labels and "skycluster.io/external-resources" == k.lower() and json.validate(v)]?[0]
               l2 = json.decode(l1) if l1 else Undefined
-              filtered = [e for e in l2 if e["apiVersion"] and e["kind"] and e["apiVersion"].lower() == av.lower() and e["kind"].lower() == ki.lower() ]
+              filtered = [e for e in l2 if e["apiVersion"] and e["kind"] and e["apiVersion"].lower() == av.lower() and e["kind"].lower() == ki.lower() ] if l2 else []
               ext_id = filtered[0]?.id if filtered and len(filtered) == 1 else Undefined
               # If it does not exist, try name
               ext_name = filtered[0]?.name if (not ext_id and filtered) and len(filtered) == 1 else Undefined
@@ -117,9 +137,9 @@ spec:
             }
 
             _management_policy: (any, str, str) -> any = lambda labels, av, ki {
-              l1 = [v for k, v in labels if labels and "skycluster.io/external-resources" == k.lower() and json.validate(v)][0]
+              l1 = [v for k, v in labels if labels and "skycluster.io/external-resources" == k.lower() and json.validate(v)]?[0]
               l2 = json.decode(l1) if l1 else Undefined
-              filtered = [e for e in l2 if e["apiVersion"] and e["kind"] and e["apiVersion"].lower() == av.lower() and e["kind"].lower() == ki.lower() ]
+              filtered = [e for e in l2 if e["apiVersion"] and e["kind"] and e["apiVersion"].lower() == av.lower() and e["kind"].lower() == ki.lower() ] if l2 else []
               {managementPolicies = ["Observe"]} if len(filtered) > 0 else {managementPolicies = ["*"]} 
             }
 
@@ -130,12 +150,10 @@ spec:
             }
 
             _default_labels = {
-              **oxr.metadata?.labels,
               **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId),
             }
 
             _default_annotations = {
-              **oxr.metadata?.annotations,
               **helper._is_paused_label(oxr.metadata.labels),
             }
 
@@ -520,53 +538,59 @@ spec:
 
             dxr = {
               **option("params").dxr,
-              
-              if _vpcId:
-                status.vpc = {
-                  id = _vpcId
-                  cidrBlock = _vpcCidr 
-                } 
-              
-              if _defaultSecGroup:
-                status.securityGroup = {
-                  id = _defaultSecGroup
-                } 
-              
-              if oxr.spec?.externalNetwork:
-                status.externalNetwork = {
-                  networkName = ocds?["extNetwork"]?.Resource?.status?.atProvider?.name
-                  networkId = ocds?["extNetwork"]?.Resource?.status?.atProvider?.id
-                  subnetName = ocds?["extSubnet"]?.Resource?.status?.atProvider?.name
-                  subnetId = ocds?["extSubnet"]?.Resource?.status?.atProvider?.id
-                }
-              status.subnets = [
-                {
-                  id = v.status?.atProvider?.id
-                  networkId = v.status?.atProvider?.networkId
-                  # networkName = _extNetworkName if v.status?.atProvider?.networkId == _extNetworkId else Undefined
-                  gatewayIp= v.status?.atProvider?.gatewayIp
-                  cidrBlock = v.status?.atProvider?.cidrBlock
-                } for _, v in _ocdsSubnets if v
-              ]
-
-              if _keypairId:
-                status.keypair = {
-                  id = _keypairId
-                  name = _keypairName
-                  publicKey = _publicKey
-                }
-              
-              if _floatingIp or _instanceIp:
-                status.gateway = {
-                  publicIp = _floatingIp
-                  privateIp = _instanceIp
-                }
-              if ocds?["router"]:
-                status.router ={
-                  routerId = ocds["router"]?.Resource?.status?.atProvider?.id
-                  routerName = ocds["router"]?.Resource?.status?.atProvider?.name
-                  externalNetworkId = ocds["router"]?.Resource?.status?.atProvider?.externalNetworkId
-                }
+              status = {
+                if _provSettings.metadata?.labels?["skycluster.io/provider-profile"]:
+                  providerProfileName = _provSettings.metadata?.labels["skycluster.io/provider-profile"]
+                if _vpcId:
+                  vpc = {
+                    id = _vpcId
+                    cidrBlock = _vpcCidr 
+                  } 
+                if _defaultSecGroup:
+                  securityGroup = {
+                    id = _defaultSecGroup
+                  } 
+                if oxr.spec?.externalNetwork:
+                  externalNetwork = {
+                    if ocds?["extNetwork"]?.Resource?.status?.atProvider?.name:
+                      networkName = ocds?["extNetwork"]?.Resource?.status?.atProvider?.name
+                    if ocds?["extNetwork"]?.Resource?.status?.atProvider?.id:
+                      networkId = ocds?["extNetwork"]?.Resource?.status?.atProvider?.id
+                    if ocds?["extSubnet"]?.Resource?.status?.atProvider?.name:
+                      subnetName = ocds?["extSubnet"]?.Resource?.status?.atProvider?.name
+                    if ocds?["extSubnet"]?.Resource?.status?.atProvider?.id:
+                      subnetId = ocds?["extSubnet"]?.Resource?.status?.atProvider?.id
+                  }
+                subnets = [
+                  {
+                    id = v.status?.atProvider?.id
+                    networkId = v.status?.atProvider?.networkId
+                    # networkName = _extNetworkName if v.status?.atProvider?.networkId == _extNetworkId else Undefined
+                    gatewayIp= v.status?.atProvider?.gatewayIp
+                    cidrBlock = v.status?.atProvider?.cidrBlock
+                  } for _, v in _ocdsSubnets if v and v.status?.atProvider?.id
+                ]
+                if _keypairId:
+                  keypair = {
+                    id = _keypairId
+                    name = _keypairName
+                    publicKey = _publicKey
+                  }
+                if _floatingIp or _instanceIp:
+                  gateway = {
+                    publicIp = _floatingIp
+                    privateIp = _instanceIp
+                  }
+                if ocds?["router"]:
+                  router ={
+                    if ocds["router"]?.Resource?.status?.atProvider?.id:
+                      routerId = ocds["router"]?.Resource?.status?.atProvider?.id
+                    if ocds["router"]?.Resource?.status?.atProvider?.name:
+                      routerName = ocds["router"]?.Resource?.status?.atProvider?.name
+                    if ocds["router"]?.Resource?.status?.atProvider?.externalNetworkId:
+                      externalNetworkId = ocds["router"]?.Resource?.status?.atProvider?.externalNetworkId
+                  }
+              }
             }
 
             # Collect all resources into a list for output

@@ -90,6 +90,9 @@ spec:
             _skySetup = _extraRes["SkySetups"][0]
             assert _skySetup is not Undefined, "SkySetup must be provided in the extra resources"
 
+            _provSetup = _extraRes["XSetup"][0]
+            assert _provSetup is not Undefined, "ProviderSetup must be provided in the extra resources"
+
             _provCfg = _extraRes["ProviderConfigs"]?[0]
             assert _provCfg is not Undefined, "ProviderConfig must be provided in the extra resources"
 
@@ -98,7 +101,7 @@ spec:
             _oxrProvRegion = oxr.spec.providerRef.region
             _oxrProvZone = oxr.spec.providerRef.zone
             _oxrProvPlatform = oxr.spec.providerRef.platform
-            _oxrAppId = oxr.spec.providerRef.applicationId or Undefined
+            _oxrAppId = oxr.spec.applicationId or Undefined
 
             assert _oxrProvRegion and _oxrProvZone and _oxrProvPlatform, \
               "Provider region, primary zone, platform must be specified"
@@ -113,14 +116,11 @@ spec:
             _items += [ec2v1beta1.SecurityGroup{
               metadata = {
                 labels = {
-                  **oxr.metadata?.labels
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   "skycluster.io/composite-name" = _oxrName,
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("securityGroup"),
-                  **helper._is_paused_label(oxr.metadata.labels),
                 }
               },
               spec = {
@@ -149,14 +149,11 @@ spec:
               ec2v1beta1.SecurityGroupRule{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("securityGroupRuleInbound-{0}-{1}".format(port.fromPort, port.toPort)),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -183,15 +180,12 @@ spec:
 
             _items += [ec2v1beta1.KeyPair{
               metadata = {
-                labels = {
-                  **oxr.metadata?.labels 
+                labels = { 
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId) 
                   "skycluster.io/composite-name" = _oxrName,
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("keypair"),
-                  **helper._is_paused_label(oxr.metadata.labels),
                 }
               },
               spec = {
@@ -209,14 +203,11 @@ spec:
             _items += [ec2v1beta1.NetworkInterface{
               metadata = {
                 labels = {
-                  **oxr.metadata?.labels
                   **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                   "skycluster.io/composite-name" = _oxrName,
                 }
                 annotations = {
-                  **oxr.metadata?.annotations,
                   **helper._set_resource_name("networkInterface"),
-                  **helper._is_paused_label(oxr.metadata.labels),
                 }
               },
               spec = {
@@ -230,7 +221,7 @@ spec:
                     },
                   },
                   securityGroupSelector.matchLabels = {
-                    **helper._filter_default_labels(oxr.metadata.labels)
+                    **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
                   },
                 },
                 providerConfigRef = {
@@ -243,14 +234,11 @@ spec:
               ec2v1beta1.EIP {
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("elasticIP"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -276,17 +264,43 @@ spec:
             _keypairName = ocds?["keypair"]?.Resource?.status?.atProvider?.id or Undefined
 
             _items += [
+              _helper_instance()
+            ] if (helper._ready(ocds?["networkInterface"]) and _keypairName) or ocds?["instance"] else []
+
+            _keypairId = ocds?["keypair"]?.Resource?.status?.atProvider?.keyPairId or Undefined
+            _privateIp = ocds?["networkInterface"]?.Resource?.status?.atProvider?.privateIp or Undefined
+            _publicIp = ocds?["elasticIP"]?.Resource?.status?.atProvider?.publicIp or Undefined
+
+            dxr = {
+              **option("params").dxr,
+              status = {
+                providerName = _provSetup?.metadata?.labels?["crossplane.io/composite"]
+                if _keypairId and _keypairName:
+                  keypair = {
+                    name = _keypairName
+                    id = _keypairId
+                  } 
+              if _privateIp or _publicIp:
+                network = {
+                  privateIp = _privateIp
+                  publicIp = _publicIp
+                } 
+              if len(ocds?["instance"]?.Resource?.status?.atProvider?.instanceMarketOptions or []) > 0:
+                spotInstance = True
+              }
+            }
+
+            items = [*_items, dxr]
+
+            _helper_instance = lambda {
               ec2v1beta1.Instance{
                 metadata = {
                   labels = {
-                    **oxr.metadata?.labels
                     **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
                     "skycluster.io/composite-name" = _oxrName,
                   }
                   annotations = {
-                    **oxr.metadata?.annotations,
                     **helper._set_resource_name("instance"),
-                    **helper._is_paused_label(oxr.metadata.labels),
                   }
                 },
                 spec = {
@@ -315,32 +329,19 @@ spec:
                       }
                     ]
                     userData = oxr.spec.userData
+                    instanceMarketOptions = [{
+                      marketType = "spot" 
+                      # spotOptions = [{
+                      #   maxPrice = "0.15"
+                      # }]
+                    }] if oxr.spec.preferSpot else Undefined
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,
                   },
                 }
               }
-            ] if (helper._ready(ocds?["networkInterface"]) and _keypairName) or ocds?["instance"] else []
-
-
-            _keypairId = ocds?["keypair"]?.Resource?.status?.atProvider?.keyPairId or Undefined
-            _privateIp = ocds?["networkInterface"]?.Resource?.status?.atProvider?.privateIp or Undefined
-            _publicIp = ocds?["elasticIP"]?.Resource?.status?.atProvider?.publicIp or Undefined
-
-            dxr = {
-              **option("params").dxr,
-              status.keypair = {
-                name = _keypairName
-                id = _keypairId
-              } if _keypairId and _keypairName else Undefined,
-              status.network = {
-                privateIp = _privateIp
-                publicIp = _publicIp
-              } if _privateIp or _publicIp else Undefined,
             }
-
-            items = [*_items, dxr]
     - step: function-auto-ready
       functionRef:
         name: function-auto-ready
