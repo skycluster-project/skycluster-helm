@@ -1,13 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: skycluster-operator
-    control-plane: controller-manager
-  name: skycluster-system
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
