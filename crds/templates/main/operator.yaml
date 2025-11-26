@@ -1,4 +1,13 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+  name: skycluster-system
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
@@ -59,13 +68,13 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass
+  - atlas
   verbs:
   - '*'
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass/status
+  - atlas/status
   verbs:
   - get
 ---
@@ -80,7 +89,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass
+  - atlas
   verbs:
   - create
   - delete
@@ -92,7 +101,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass/status
+  - atlas/status
   verbs:
   - get
 ---
@@ -107,7 +116,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass
+  - atlas
   verbs:
   - get
   - list
@@ -115,7 +124,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass/status
+  - atlas/status
   verbs:
   - get
 ---
@@ -130,13 +139,13 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlasmeshes
   verbs:
   - '*'
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlasmeshes/status
   verbs:
   - get
 ---
@@ -151,7 +160,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlasmeshes
   verbs:
   - create
   - delete
@@ -163,7 +172,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlasmeshes/status
   verbs:
   - get
 ---
@@ -178,7 +187,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlasmeshes
   verbs:
   - get
   - list
@@ -186,7 +195,78 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlasmeshes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
   verbs:
   - get
 ---
@@ -267,6 +347,148 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
   name: skycluster-operator-core-latency-admin-role
 rules:
 - apiGroups:
@@ -338,18 +560,18 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: skycluster-operator
-  name: skycluster-operator-core-skycluster-admin-role
+  name: skycluster-operator-core-providerprofile-admin-role
 rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster
+  - providerprofiles
   verbs:
   - '*'
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster/status
+  - providerprofiles/status
   verbs:
   - get
 ---
@@ -359,12 +581,12 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: skycluster-operator
-  name: skycluster-operator-core-skycluster-editor-role
+  name: skycluster-operator-core-providerprofile-editor-role
 rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster
+  - providerprofiles
   verbs:
   - create
   - delete
@@ -376,7 +598,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster/status
+  - providerprofiles/status
   verbs:
   - get
 ---
@@ -386,12 +608,12 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: skycluster-operator
-  name: skycluster-operator-core-skycluster-viewer-role
+  name: skycluster-operator-core-providerprofile-viewer-role
 rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster
+  - providerprofiles
   verbs:
   - get
   - list
@@ -399,7 +621,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - skycluster/status
+  - providerprofiles/status
   verbs:
   - get
 ---
@@ -409,42 +631,16 @@ metadata:
   name: skycluster-operator-manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - atlass
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - atlass/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - atlass/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlas
+  - atlasmeshes
   - devicenodes
   - ilptasks
   - images
   - instancetypes
   - latencies
   - providerprofiles
-  - skyclusters
   verbs:
   - create
   - delete
@@ -456,27 +652,27 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/finalizers
+  - atlas/finalizers
+  - atlasmeshes/finalizers
   - devicenodes/finalizers
   - ilptasks/finalizers
   - images/finalizers
   - instancetypes/finalizers
   - latencies/finalizers
   - providerprofiles/finalizers
-  - skyclusters/finalizers
   verbs:
   - update
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlas/status
+  - atlasmeshes/status
   - devicenodes/status
   - ilptasks/status
   - images/status
   - instancetypes/status
   - latencies/status
   - providerprofiles/status
-  - skyclusters/status
   verbs:
   - get
   - patch
@@ -794,7 +990,7 @@ spec:
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
         command:
         - /manager
-        image: etesami/skycluster-operator:latest
+        image: etesami/skycluster-operator:v0.1.1
         livenessProbe:
           httpGet:
             path: /healthz
@@ -824,6 +1020,7 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: webhook-certs
@@ -900,6 +1097,9 @@ webhooks:
       path: /mutate-apps-v1-deployment
   failurePolicy: Fail
   name: mdeployment.kb.io
+  namespaceSelector:
+    matchLabels:
+      skycluster.io/app-scope: distributed
   rules:
   - apiGroups:
     - apps

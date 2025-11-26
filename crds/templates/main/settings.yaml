@@ -7,13 +7,6 @@ metadata:
     skycluster.io/managed-by: skycluster
 ---
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: skycluster-system
-  labels:
-    skycluster.io/managed-by: skycluster
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: skycluster-sva
