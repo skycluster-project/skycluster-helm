@@ -1,0 +1,90 @@
+install: true
+testing: false
+
+providers:
+  public:
+    aws:
+      ec2:
+        name: provider-aws-ec2
+        version: v1.23.1
+        enabled: true
+      eks:
+        name: provider-aws-eks
+        version: v1.23.1
+        enabled: true
+      iam: 
+        name: provider-aws-iam
+        version: v1
+        enabled: true
+      cloudwatchevents: 
+        name: provider-aws-cloudwatchevents
+        version: v1
+        enabled: true
+      sqs:
+        name: provider-aws-sqs
+        version: v1
+        enabled: true
+    gcp:  
+      compute:
+        name: provider-gcp-compute
+        version: v1.14.1
+        enabled: true
+      gke:
+        name: provider-gcp-gke
+        version: v1.14.1
+        enabled: true
+      container:
+        name: provider-gcp-container
+        version: v1.14.1
+        enabled: true
+      cloudplatform:
+        name: provider-gcp-cloudplatform
+        version: v1.14.1
+        enabled: true
+    azure:  
+      compute:
+        name: provider-azure-compute
+        version: v1.13.1
+        enabled: false
+      network:
+        name: provider-azure-network
+        version: v1.13.1
+        enabled: false
+  community:
+    openstack:  
+      name: provider-openstack
+      version: v0.7.2
+      enabled: true
+      repo: docker.io/etesami/provider-openstack
+    helm:
+      name: provider-helm
+      version: v0
+      enabled: true
+    kubernetes:
+      name: provider-kubernetes
+      version: v0
+      enabled: true
+      repo: xpkg.upbound.io/upbound/provider-kubernetes
+    ssh:
+      name: provider-ssh
+      version: v0.1.1-rc3
+      enabled: true
+      repo: docker.io/etesami/provider-ssh
+
+functions:
+  go-templating:
+    name: function-go-templating
+    version: v0.10.0
+  extra-resources:
+    name: function-extra-resources
+    version: v0.1.0
+  auto-ready:
+    name: function-auto-ready
+    version: v0.5.0
+  patch-and-transform:
+    name: function-patch-and-transform
+    version: v0.9.0
+  kcl:
+    name: function-kcl
+    version: v0.11.5
+

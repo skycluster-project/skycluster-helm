@@ -21,6 +21,3 @@
 .idea/
 *.tmproj
 .vscode/
-
-# This is custom savi helm chart and should generate separetly
-savi

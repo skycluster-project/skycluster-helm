@@ -1,7 +1,6 @@
 apiVersion: v2
-name: skycluster-main
-description: SkyCluster Main Helm Chart
-
+name: skycluster-dep
+description: SkyCluster Dependency Helm Chart
 type: application
 
 # This is the chart version. This version number should be incremented each time you make changes
