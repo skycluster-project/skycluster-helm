@@ -1,3 +1,4 @@
+{{ if or .Values.install }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1310,3 +1311,4 @@ webhooks:
     resources:
     - deploymentpolicies
   sideEffects: None
+{{ end }}

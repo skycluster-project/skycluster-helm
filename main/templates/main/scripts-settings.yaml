@@ -1,4 +1,4 @@
-{{ if or .Values.install }}
+{{ if or .Values.install .Values.test }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -267,6 +267,7 @@ data:
     # with the way we setup remote clusters
     if wait_for_remote_ca "${KUBECFG_PATH}" "istio-system"; then
       echo "---- Remote CA ready, creating secret..."
+      sleep 2  # slight delay to ensure consistency
       istioctl create-remote-secret --kubeconfig="${KUBECFG_PATH}" --name="${LOCAL_CLUSTER}" > "$tmpdir/remote-secret.yaml"      
       echo "---- Creating local cluster cacerts secret '${LOCAL_CLUSTER}-cacerts' with remote-secret data…"
       kubectl -n "${NAMESPACE}" create secret generic "${LOCAL_CLUSTER}-cacerts" \
