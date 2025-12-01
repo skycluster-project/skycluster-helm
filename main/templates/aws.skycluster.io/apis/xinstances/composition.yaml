@@ -55,9 +55,9 @@ spec:
                   - key: skycluster.io/provider-region
                     type: FromCompositeFieldPath
                     valueFromFieldPath: spec.providerRef.region
-                  - key: skycluster.io/provider-zone
-                    type: FromCompositeFieldPath
-                    valueFromFieldPath: spec.providerRef.zone
+                  # - key: skycluster.io/provider-zone
+                  #   type: FromCompositeFieldPath
+                  #   valueFromFieldPath: spec.providerRef.zone
                   - key: skycluster.io/application-id
                     type: FromCompositeFieldPath
                     valueFromFieldPath: spec.applicationId
@@ -200,72 +200,77 @@ spec:
             }] if oxr.spec.publicKey or ocds?["keypair"] else []
 
 
-            _items += [ec2v1beta1.NetworkInterface{
-              metadata = {
-                labels = {
-                  **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
-                  "skycluster.io/composite-name" = _oxrName,
-                }
-                annotations = {
-                  **helper._set_resource_name("networkInterface"),
-                }
-              },
-              spec = {
-                forProvider = {
-                  sourceDestCheck = False,
-                  region = _oxrProvRegion,
-                  subnetIdSelector = {
-                    matchLabels = {
-                      **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
-                      "skycluster.io/public-subnet" = "true" if oxr.spec.publicIp else "false",
-                    },
-                  },
-                  securityGroupSelector.matchLabels = {
-                    **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
-                  },
-                },
-                providerConfigRef = {
-                  name = _provCfg.metadata.name,
-                },
-              }
-            }]
+            # _items += [ec2v1beta1.NetworkInterface{
+            #   metadata = {
+            #     labels = {
+            #       **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+            #       "skycluster.io/composite-name" = _oxrName,
+            #     }
+            #     annotations = {
+            #       **helper._set_resource_name("networkInterface"),
+            #     }
+            #   },
+            #   spec = {
+            #     forProvider = {
+            #       sourceDestCheck = False,
+            #       region = _oxrProvRegion,
+            #       subnetIdSelector = {
+            #         matchLabels = {
+            #           **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
+            #           "skycluster.io/public-subnet" = "true" if oxr.spec.publicIp else "false",
+            #         },
+            #       },
+            #       securityGroupSelector.matchLabels = {
+            #         **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
+            #       },
+            #     },
+            #     providerConfigRef = {
+            #       name = _provCfg.metadata.name,
+            #     },
+            #   }
+            # }]
 
-            _items += [
-              ec2v1beta1.EIP {
-                metadata = {
-                  labels = {
-                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
-                    "skycluster.io/composite-name" = _oxrName,
-                  }
-                  annotations = {
-                    **helper._set_resource_name("elasticIP"),
-                  }
-                },
-                spec = {
-                  forProvider = {
-                    domain = "vpc"
-                    networkBorderGroup = ""
-                    networkInterfaceSelector = {
-                      matchLabels = {
-                        **helper._filter_default_labels(oxr.metadata.labels)
-                        "skycluster.io/composite-name" = _oxrName,
-                      }
-                    }
-                    region = _oxrProvRegion,
-                  },
-                  providerConfigRef = {
-                    name = _provCfg.metadata.name,
-                  },
-                }
-              }
-            ] if oxr.spec.publicIp or ocds?["elasticIP"] else []
+            # _items += [
+            #   ec2v1beta1.EIP {
+            #     metadata = {
+            #       labels = {
+            #         **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+            #         "skycluster.io/composite-name" = _oxrName,
+            #       }
+            #       annotations = {
+            #         **helper._set_resource_name("elasticIP"),
+            #       }
+            #     },
+            #     spec = {
+            #       forProvider = {
+            #         domain = "vpc"
+            #         networkBorderGroup = ""
+            #         networkInterfaceSelector = {
+            #           matchLabels = {
+            #             **helper._filter_default_labels(oxr.metadata.labels)
+            #             "skycluster.io/composite-name" = _oxrName,
+            #           }
+            #         }
+            #         region = _oxrProvRegion,
+            #       },
+            #       providerConfigRef = {
+            #         name = _provCfg.metadata.name,
+            #       },
+            #     }
+            #   }
+            # ] if oxr.spec.publicIp or ocds?["elasticIP"] else []
 
 
             _keypairName = ocds?["keypair"]?.Resource?.status?.atProvider?.id or Undefined
 
-            _items += [
-              _helper_instance()
-            ] if (helper._ready(ocds?["networkInterface"]) and _keypairName) or ocds?["instance"] else []
+            if oxr.spec.preferSpot:
+              _items += [
+                _helper_instance_spot()
+              ] if (_keypairName) or ocds?["instance"] else []
+            else:
+              _items += [
+                _helper_instance()
+              ] if (_keypairName) or ocds?["instance"] else []
 
             _keypairId = ocds?["keypair"]?.Resource?.status?.atProvider?.keyPairId or Undefined
             _privateIp = ocds?["networkInterface"]?.Resource?.status?.atProvider?.privateIp or Undefined
@@ -317,24 +322,61 @@ spec:
 
                       } for vol in oxr.spec?.rootVolumes
                     ] if oxr.spec?.rootVolumes else Undefined
-                    networkInterface = [{
-                        networkInterfaceIdSelector = {
-                          matchLabels = {
-                            **helper._filter_default_labels(oxr.metadata.labels)
-                            "skycluster.io/composite-name" = _oxrName,
-                          }
-                        }
-                        deviceIndex = 0,
-                        deleteOnTermination = False
-                      }
-                    ]
+                    subnetIdSelector = {
+                      matchLabels = {
+                        **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
+                        "skycluster.io/subnet-zone" = _oxrProvZone
+                      },
+                    }
+                    associatePublicIpAddress = oxr.spec.publicIp or False
                     userData = oxr.spec.userData
                     instanceMarketOptions = [{
                       marketType = "spot" 
-                      # spotOptions = [{
-                      #   maxPrice = "0.15"
-                      # }]
+                      spotOptions = [{
+                        maxPrice = "1000"
+                      }]
                     }] if oxr.spec.preferSpot else Undefined
+                  },
+                  providerConfigRef = {
+                    name = _provCfg.metadata.name,
+                  },
+                }
+              }
+            }
+
+            _helper_instance_spot = lambda {
+              ec2v1beta1.SpotInstanceRequest{
+                metadata = {
+                  labels = {
+                    **helper._set_default_labels(_oxrProvPlatform, _oxrProvRegion, _oxrProvZone, _oxrAppId)
+                    "skycluster.io/composite-name" = _oxrName,
+                  }
+                  annotations = {
+                    **helper._set_resource_name("instance"),
+                  }
+                },
+                spec = {
+                  forProvider = {
+                    ami = oxr.spec.image,
+                    instanceType = oxr.spec.flavor,
+                    sourceDestCheck = False,
+                    region = _oxrProvRegion,
+                    keyName = _keypairName
+                    rootBlockDevice = [
+                      {
+                        volumeSize = float(vol.size)
+                        volumeType = vol.type or "gp2"
+
+                      } for vol in oxr.spec?.rootVolumes
+                    ] if oxr.spec?.rootVolumes else Undefined
+                    subnetIdSelector = {
+                      matchLabels = {
+                        **helper._filter_labels(oxr.metadata.labels, ["provider-platform", "provider-region", "application-id"])
+                        "skycluster.io/subnet-zone" = _oxrProvZone
+                      },
+                    }
+                    associatePublicIpAddress = oxr.spec.publicIp or False
+                    userData = oxr.spec.userData
                   },
                   providerConfigRef = {
                     name = _provCfg.metadata.name,

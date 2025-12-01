@@ -1,9 +1,9 @@
 #!/bin/bash
 
-SRC_ROOT="/home/ubuntu/skycluster-project/skycluster-compositions"
+SRC_ROOT="/home/ubuntu/skycluster-compositions"
 SRC_FILE="$1"
-TMPL_ROOT="../crds/templates"
-CRDS_ROOT="../crds/crds"
+TMPL_ROOT="../main/templates"
+CRDS_ROOT="../main/crds"
 
 if [[ -z "$SRC_FILE" ]]; then
     echo "Usage: $0 <file_path>"

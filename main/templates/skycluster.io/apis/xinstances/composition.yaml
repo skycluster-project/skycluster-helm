@@ -140,13 +140,13 @@ spec:
 
 
             # Supporting both skycluster abstract types and images and provider-native images and types
-            _abstractFlavor = regex.match(oxr.spec?.flavor or "2vCPU-4GB", "^\d+vCPU-\d+GB$")
-            _abstractImage = regex.match(oxr.spec?.image or "ubuntu-24.04", "^ubuntu-\d+\.\d+$")
+            # _abstractFlavor = regex.match(oxr.spec?.flavor or "2vCPU-4GB", "^\d+vCPU-\d+GB$")
+            _abstractImage = regex.match(oxr.spec?.image or "ubuntu-24.04", "^ubuntu-\d+\\.\d+(-gpu)?$")
 
             _ami = helper._get_image(_provSettings, oxr.spec?.image or "ubuntu-24.04", _oxrProvZone)?.name \
               if _abstractImage else oxr.spec?.image
-            _it = helper._get_instance_type(_provSettings, oxr.spec?.flavor or "2vCPU-4GB", _oxrProvZone)?[0] \
-              if _abstractFlavor else oxr.spec?.flavor
+            _it = helper._get_instance_type(_provSettings, oxr.spec?.flavor or "2vCPU-4GB", _oxrProvZone)?[0] 
+              # if _abstractFlavor else oxr.spec?.flavor
 
             _ud = oxr.spec?.userData or Undefined
             _scripts = ["ip-forwarding", "docker-config"]
