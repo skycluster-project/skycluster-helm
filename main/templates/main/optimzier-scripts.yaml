@@ -396,8 +396,9 @@ data:
     }
 
     class Provider:
-      def __init__(self, name, platform):
+      def __init__(self, name, upstreamName, platform):
         self.name = name
+        self.upstreamName = upstreamName
         self.platform = platform # cloud name, e.g. aws, azure, gcp, ...
         self.region = ""
         self.regionAlias = ""
@@ -523,9 +524,9 @@ data:
         
         # map JSON fields to the fields your code expects
         platform = item.get('platform') 
-        pName = item.get('name')
-
-        pp = Provider(pName, platform)
+        upstreamName = item.get('upstreamName')
+        pName = platform + "-" + item.get('region', '') + "-" + item.get('zone', '')
+        pp = Provider(pName, upstreamName, platform)
         pp.regionAlias = item.get('regionAlias', '')
         pp.region = item.get('region', '')
         pp.pType = item.get('pType', '')
@@ -584,7 +585,7 @@ data:
       mappingReverse = {value: key for key, value in mapping.items()}
       return providers, mapping, mappingReverse
       
-    def import_prov_attributes_json(filePath):
+    def import_prov_attributes_json(providers, filePath):
       visitedSourceNodes = []
       egressCosts = defaultdict(dict)
       pLatencies = defaultdict(dict)
@@ -593,31 +594,62 @@ data:
       with open(filePath, 'r') as file:
         data = json.load(file)
         for entry in data:
-          pp = entry.get('srcName').strip()
+          pp_src = entry.get('src')
+          pp_platform = pp_src.get('platform', '').strip()
+          pp_region = pp_src.get('region', '').strip()
+          pp_zone = pp_src.get('zone', '').strip()
+
+          if pp_platform and pp_region and pp_zone:
+            pp = f"{pp_platform}-{pp_region}-{pp_zone}"
+          else:
+            if not pp_platform or not pp_region:
+              raise ValueError(f"Error: Platform or Region missing in source provider data: {pp_src}")
+            if not pp_zone:
+              # we will duplicate settings for all zones if zone is missing
+              zones = []
+              for _, pp_obj in providers.items():
+                if pp_obj.platform == pp_platform and pp_obj.region == pp_region:
+                  zones.append(pp_obj.zone)
+              if not zones:
+                raise ValueError(f"No zones (active?) found for provider {pp_platform} in region {pp_region}.")
           
-          if pp not in pLatencies:
+          pp_dst = entry.get('dst')
+          pp_platform_dst = pp_dst.get('platform', '').strip()
+          pp_region_dst = pp_dst.get('region', '').strip()
+          pp_zone_dst = pp_dst.get('zone', '').strip()
+
+          if not pp_platform_dst or not pp_region_dst:
+            raise ValueError(f"Error: Platform or Region missing in destination provider data: {pp_dst}")
+          if not pp_zone_dst:
+            # we will duplicate settings for all zones if zone is missing
+            zones_dst = []
+            for _, pp_obj in providers.items():
+              if pp_obj.platform == pp_platform_dst and pp_obj.region == pp_region_dst:
+                zones_dst.append(pp_obj.zone)
+            if not zones_dst:
+              raise ValueError(f"No zones (active?) found for provider {pp_platform_dst} in region {pp_region_dst}.")
+
+          for src_zone in (zones if not pp_zone else [pp_zone]):
+            pp = f"{pp_platform}-{pp_region}-{src_zone}"
+
+            if pp not in pLatencies:
               pLatencies[pp][pp] = 0
               egressCosts[pp][pp] = 0
+
+            for dst_zone in (zones_dst if not pp_zone_dst else [pp_zone_dst]):
+              dd = f"{pp_platform_dst}-{pp_region_dst}-{dst_zone}"
               
-          dd = entry.get('dstName').strip()
-          latency = entry.get('latency')
-          eCost = entry.get('egressCost_dataRate')
-      
-          egressCosts[pp][dd] = eCost
-          pLatencies[pp][dd] = latency
+              latency = entry.get('latency')
+              eCost = entry.get('egressCost_dataRate')
           
-          pEdges.append((pp, dd, latency, eCost))
-          
-          # For each pp we need to have an edge from itself to itself, i.e. pp -> pp
-          # So we use doubleEdgeInserted
-          if pp not in visitedSourceNodes:
-              pEdges.append((pp, pp, 0, 0))
-              # pdag.add_edge(providers[pp], providers[pp], convert_to_ms("0ms"), 0)
-              visitedSourceNodes.append(pp)  
+              egressCosts[pp][dd] = eCost
+              pLatencies[pp][dd] = latency
+              
+              pEdges.append((pp, dd, latency, eCost))
         
       return pEdges, pLatencies, egressCosts
       
-    def import_vservices_json(filePath):
+    def import_vservices_json(providers, filePath):
       vservices = {}
       count = 0
 
@@ -625,15 +657,33 @@ data:
         data = json.load(file)
         for entry in data:
           vsName = entry.get('vservice_name').strip()
-          vsProvider = entry.get('provider_name').strip()
-          vsCost = entry.get('deploy_cost', 0)
-          vsAvailability = entry.get('availability')
-          # TODO: If the is a new vserivce we cate an object for it
-          if vsName not in vservices:
-            vservices[vsName] = VService(vsName)
-            count += 1
-          vservices[vsName].set_costs(vsProvider, vsCost)
-          vservices[vsName].set_availCount(vsProvider, vsAvailability)
+          
+          # vsProvider = entry.get('provider_name').strip()
+          vsProvPltfm = entry.get('provider_platform').strip()
+          vsProvRegion = entry.get('provider_region').strip()
+          vsProvZone = entry.get('provider_zone', '').strip()
+
+          if not vsProvPltfm or not vsProvRegion:
+            raise ValueError(f"Error: Platform or Region missing in vservice provider data: {entry}")
+          if not vsProvZone: # we will duplicate settings for all zones if zone is missing
+            zones = []
+            for _, pp_obj in providers.items():
+              if pp_obj.platform == vsProvPltfm and pp_obj.region == vsProvRegion:
+                zones.append(pp_obj.zone)
+            if not zones:
+              raise ValueError(f"No zones (active?) found for provider {vsProvPltfm} in region {vsProvRegion}.")
+          for z in (zones if not vsProvZone else [vsProvZone]):
+            vsProvider = f"{vsProvPltfm}-{vsProvRegion}-{z}"
+            
+            vsCost = entry.get('deploy_cost', 0)
+            vsAvailability = entry.get('availability')
+          
+            # TODO: If the is a new vserivce we create an object for it
+            if vsName not in vservices:
+              vservices[vsName] = VService(vsName)
+              count += 1
+            vservices[vsName].set_costs(vsProvider, vsCost)
+            vservices[vsName].set_availCount(vsProvider, vsAvailability)
       return vservices
       
     def import_tasks_locations2(filePath, vservices, providers):
@@ -706,7 +756,10 @@ data:
     def import_tasks_edges_json(filePath):
       tEdges = []
       with open(filePath, 'r') as file:
-        data = json.load(file)
+        try:
+          data = json.load(file)
+        except json.JSONDecodeError:
+          return tEdges
         for entry in data:
           ss = entry.get('srcTask').strip()
           tt = entry.get('dstTask').strip()
@@ -1182,13 +1235,13 @@ data:
       print("Reading the provider attributes...")
       thisFile = projectPath + provAttrFileName
       check_dir_exists(thisFile)
-      pEdges, pLatencies, egressCosts = dt.import_prov_attributes_json(thisFile)
+      pEdges, pLatencies, egressCosts = dt.import_prov_attributes_json(providers, thisFile)
       print(f"Provider attributes read. Total {len(pEdges)} edges.")
 
       print("Reading the vservices...")
       thisFile = projectPath + vServicesFileName
       check_dir_exists(thisFile)
-      vServices = dt.import_vservices_json(thisFile)
+      vServices = dt.import_vservices_json(providers, thisFile)
       print(f"VServices read. Total {len(vServices)} vServices.")
 
       print("Reading the tasks...")
@@ -1281,7 +1334,7 @@ data:
               },
               'providerRef': {
                 'platform': f'{pp.platform}', 
-                'name': f'{pp.name}', 
+                'name': f'{pp.upstreamName}', 
                 'region': f'{pp.region}', 
                 'zone': f'{pp.zone}',
                 'type': f'{pp.pType}',
@@ -1311,7 +1364,7 @@ data:
                     'apiVersion': f'{tasks[t1_name].apiVersion}', 
                   },
                   'providerRef': {
-                    'name': f'{t1_p.name}', 
+                    'name': f'{t1_p.upstreamName}', 
                     'region': f'{t1_p.region}', 
                     'zone': f'{t1_p.zone}', 
                     'type': f'{t1_p.pType}', 
@@ -1325,7 +1378,7 @@ data:
                     'apiVersion': f'{tasks[t2_name].apiVersion}', 
                   },
                   'providerRef': {
-                    'name': f'{t2_p.name}', 
+                    'name': f'{t2_p.upstreamName}', 
                     'region': f'{t2_p.region}', 
                     'zone': f'{t2_p.zone}', 
                     'type': f'{t2_p.pType}', 
